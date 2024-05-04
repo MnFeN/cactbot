@@ -44,7 +44,7 @@
     - [00 行 (0x00): 游戏日志](#00-行-0x00-游戏日志)
       - [格式](#格式)
       - [示例](#示例)
-      - [Don't Write Triggers Against Game Log Lines](#dont-write-triggers-against-game-log-lines)
+      - [避免将游戏日志用于触发器](#避免将游戏日志用于触发器)
     - [01 行 (0x01)：切换区域](#01-行-0x01切换区域)
       - [格式](#格式-1)
       - [示例](#示例-1)
@@ -60,7 +60,7 @@
     - [11 行 (0x0B)：队员列表](#11-行-0x0b队员列表)
       - [格式](#格式-5)
       - [示例](#示例-5)
-    - [12 行 (0x0C)：玩家数据](#12-行-0x0c玩家数据)
+    - [12 行 (0x0C)：玩家属性](#12-行-0x0c玩家属性)
       - [格式](#格式-6)
       - [示例](#示例-6)
     - [20 行 (0x14)：技能咏唱](#20-行-0x14技能咏唱)
@@ -148,7 +148,7 @@
     - [252 行 (0xFC): 网络数据](#252-行-0xfc-网络数据)
     - [253 行 (0xFD)：插件版本](#253-行-0xfd插件版本)
     - [254 行 (0xFE)：错误日志](#254-行-0xfe错误日志)
-  - [OverlayPlugin Log Lines](#overlayplugin-log-lines)
+  - [OverlayPlugin 解析日志行](#overlayplugin-解析日志行)
     - [256 行 (0x100)：注册插件](#256-行-0x100注册插件)
       - [格式](#格式-28)
       - [示例](#示例-28)
@@ -252,19 +252,17 @@ This will create encounters whose [logs you can view](#viewing-logs-after-a-figh
 
 ### 浏览网络数据
 
-如果你想深入挖掘网络数据包中的更多信息，可以尝试使用 ffxivmon。
+如果你想深入挖掘网络数据包中的更多信息，可以尝试将包含网络数据的日志文件导入 ffxivmon。
 
-To create a log file suitable for ffxivmon,
-first turn on the **(DEBUG) Dump all Network Data to logfile** setting in ACT.
+首先，你需要开启 ACT 中 FF14 解析插件选项卡的 **(DEBUG) Dump all Network Data to logfile** 选项：  
 
 ![dump network data screenshot](images/logguide_dumpnetworkdata.png)
 
-Then, run an encounter in game with ACT running.
-Once you're done, import that network log file into ffxivmon.
+然后，将该选项启用时生成的战斗日志导入 ffxivmon：
 
 ![ffxivmon import screenshot](images/logguide_ffxivmon_import.png)
 
-Now, you can walk through and investigate the network data directly.
+此时便可浏览全部网络包的数据内容。
 
 ![ffxivmon screenshot](images/logguide_ffxivmon.png)
 
@@ -310,10 +308,25 @@ data_flow
 
 ### 网络日志
 
-指 FF14 解析插件、OverlayPlugin 等解析插件处理网络数据后写入硬盘的日志数据，如 **Network_22009_20210801.log**。
-这些日志只关注于某些特定类型的网络数据，并不包含所有网络数据。
+指 FF14 解析插件、OverlayPlugin 等解析插件处理网络数据后写入硬盘的日志，日志文件如 **Network_22009_20210801.log**。  
+这些日志只关注于某些特定类型的网络数据并解析为固定格式，并不包含所有网络数据。  
 
-Here are some example network log lines:
+网络日志格式由以下几部分组成：  
+- 日志类型  
+  在每行开头，以 10 进制表示，如：   
+  - `20` = 0x14 (StartCasting)  
+  - `26` = 0x1A (StatusAdd)  
+  - `257` = 0x101 (MapEffect)  
+  - `261` = 0x105 (CombatantMemory)  
+- 时间戳   
+  为 ISO 8601 标准的时间，包含年月日时分秒和本地时区，长度固定。  
+- 日志内容  
+  每个数据字段以 `|` 连接而成的字符串，具体内容见下文中各日志类型的介绍。  
+  注意：此字符在正则表达式的字符集 `[...]` 或反义字符集 `[^...]` 以外出现时，必须使用 `\|` 转义，以区分于正则的 “或” 操作符 `|`。    
+- 校验码  
+  根据从上一个 `01` 行开始经过的行数和当前行日志文本加密产生的校验码，用于验证日志完整性。
+
+下面提供了一些网络日志的例子：  
 
 ```log
 21|2019-05-31T21:14:56.8980000-07:00|10532971|Tini Poutini|DF9|Fire IV|40002F21|Zombie Brobinyak|150003|3B9D4002|1C|DF98000|0|0|0|0|0|0|0|0|0|0|0|0|104815|348652|12000|12000|1000|1000|-767.7882|156.939|-672.0446|26285|28784|13920|15480|1000|1000|-771.8156|157.1111|-671.3281||8eaa0245ad01981b69fc1af04ea8f9a1
@@ -321,53 +334,61 @@ Here are some example network log lines:
 20|2019-05-31T20:02:41.4660000-07:00|105E3321|Tater Tot|2C9D|Peculiar Light|105E3321|Tater Tot||c375d8a2d1cf48efceccb136584ed250
 ```
 
-网络日志使用竖线 `|` 作为分隔符，日志类型为十进制，结尾包含该行日志的校验值。
+网络日志写入 .log 文件后可以用于很多外部工具，如：
 
-The ffxiv plugin does not write the parsed log lines that plugins interact with
-to disk.
+- [FFLogs](https://www.fflogs.com)
+- [ffxivmon](浏览网络数据)
+- Cactbot 时间轴生成工具 (make_timeline)【链接？】
 
-The network log lines are used by some tools, such as:
-
-- fflogs uploader
-- ffxivmon
-- cactbot make_timeline utility
-
-If you [import a network log file into ACT](#importing-an-old-fight),
-then you can view the parsed log lines for in the fight.
+你可以[重新导入](导入旧日志)该 .log 文件，这将重新解析其中的数据并生成 ACT 日志。
 
 ### ACT 日志
 
-你在不同位置看见的 `ACT 日志` `解析日志` `ACT 解析日志` 一般均指此日志。
-These are the log lines that come out of the ffxiv plugin at runtime and are
-also exposed to plugins for triggers.
-These are what the [View Logs](#viewing-logs-after-a-fight) option in ACT shows.
+你在本文及其他插件中看见的 `ACT 日志` `解析日志` `ACT 解析日志` 一般均指此日志。  
+ACT 日志同样是插件解析网络包的产物，不过采用了一种更便于人类阅读的格式。其他插件最常使用此类日志，如触发器的事件源等。  
+此类日志也是 ACT 战斗标签下[查看战斗日志](#浏览-ACT-日志)中使用的日志。
 
-Data in parsed log lines is separated by colons, i.e. `:`.
-The log line type is in hex.
+ACT 日志的开头添加了一串辅助理解的类型文本，其后的日志类型为 16 进制数，字段之间使用冒号 `:` 作为分隔符。
 
-Here is an example:
+ACT 日志格式由以下几部分组成：
+- 时间戳
+  为本地时区下 24 小时制的时间：`[HH:mm:ss.fff]`，在每行的开头，长度固定。
+- 日志类型
+  包含一串描述性的文本，和 16 进制的日志类型，如：  
+  - `StartCasting 14`
+  - `StatusAdd 1A`
+  由于解析插件的限制，Overlay 添加的日志目前无法识别类型，描述文本会显示为十进制值，如：  
+  - `257 101`
+  - `261 105`
+- 日志内容
+  每个数据字段以 `:` 连接而成的字符串，具体内容见下文中各日志类型的介绍。
 
+
+下面提供了一些与前文网络日志相对应的 ACT 日志：
 ```log
 [21:16:44.288] 15:10532971:Potato Chippy:9C:Scathe:40001299:Striking Dummy:750003:90D0000:1C:9C8000:0:0:0:0:0:0:0:0:0:0:0:0:2778:2778:0:0:1000:1000:-653.9767:-807.7275:31.99997:26945:28784:6720:15480:1000:1000:-631.5208:-818.5244:31.95173:
 ```
 
-Parsed log lines lines always start with the time in square brackets.
-This time is formatted to be in your local time zone.
-The time is followed with a hex value (in this case 0x15) that indicates the type of the line it is.
-
-The rest of the data in the line needs to be interpreted based on what type it is.
-See the following sections that describe each line.
-
-### 网络日志与 ACT 日志的差异
-
 ### 游戏日志
 
-A game log line is a specific type of log line with type `00`.
-These log lines also appear directly in your chat windows in game,
-possibly in the Battle Log tab.
-Try to [avoid writing triggers](#dont-write-triggers-against-game-log-lines) using these lines.
+游戏消息框中出现的所有系统消息。每条消息均会生成对应的网络和 ACT 日志，类型为 `00` = 0x00。  
+如果可以避免，请[避免将游戏日志用于触发器](#避免将游戏日志用于触发器)。  
 
-See: [Line 00](#line00) for examples.
+详见：[游戏日志](#line00)。  
+
+### 坐标系
+
+日志中常见以下字段：`x`:`y`:`z`:`heading`。
+- `x/y/z`:  
+  游戏内坐标系下，实体所处中心的三维坐标。  
+  该坐标系的 `x` 正方向朝东、`y` 正方向朝南、`z` 为高度轴，正方向朝上。  
+
+- `heading`:
+  游戏内坐标系下实体的面向。  
+  以弧度表示，正北 `±π`，沿俯视视角逆时针增加，如正西 = `-π/2`，正南 = `0`，正东 = `π/2`。
+
+注意该坐标系在游戏内不可见，与小地图显示的坐标不同。 
+【图】 
 
 ### 实体
 
@@ -398,6 +419,17 @@ See: [Line 00](#line00) for examples.
 在撰写触发器时，请使用与语言无关的唯一标识符，而非本地化的文本。如：  
 - 使用玩家 ID 代替玩家名，以防玩家与另一名玩家或实体重名，或有插件篡改名称；  
 - 使用 `BNpcId` `BNpcNameId` 代替实体名。  
+
+除了在日志行内查找外，可以用下述方式主动获取实体数据，如：
+- Cactbot/OverlayPlugin
+  - 通过 `GetCombatant()` 获取实体 `entity`，检索 `entity.属性`。  
+    详见 [OverlayPlugin 实体属性](https://github.com/OverlayPlugin/OverlayPlugin/blob/main/OverlayPlugin.Core/MemoryProcessors/Combatant/Common.cs#L96)。
+  - OverlayPlugin Debug 悬浮窗，可显示自身位置等信息。
+- Triggernometry
+  - 通过表达式 `${_me.属性}` `${_entity[Name].属性}` `${_entity[ID].属性}` `${_entity[bnpcid=XXX].属性}` 检索指定实体属性。  
+    详见 [Triggernometry 实体属性](https://github.com/paissaheavyindustries/Triggernometry/blob/master/Source/Triggernometry/PluginBridges/BridgeFFXIV.cs#L189)、
+    [职业属性](https://github.com/paissaheavyindustries/Triggernometry/blob/master/Source/Triggernometry/Entity.cs#L97)。
+  - 亦可自定义悬浮窗显示以上信息。
 
 ### 技能
 
@@ -482,7 +514,7 @@ See: [Line 00](#line00) for examples.
   ^.{15}\S+ 14:(?<sourceId>[^:]*):(?<source>[^:]*):(?<id>[^:]*):(?<ability>[^:]*):(?<targetId>[^:]*):(?<target>[^:]*):(?<castTime>[^:]*):(?<x>[^:]*):(?<y>[^:]*):(?<z>[^:]*):(?<heading>[^:]*)
   ```
 
-  对于大多数情况，我们并不需要这么多捕获组。比如现在仅仅关注 `id` 为 `DD5`（深仁厚泽）的日志，需要捕获 `sourceId`（咏唱者 ID），我们只需要保留自己关注的捕获组：  
+  对于大多数情况，我们并不需要这么多捕获组。比如，如果现在仅仅关注 `id` 为 `DD5`（深仁厚泽）的日志，需要捕获 `sourceId`（咏唱者 ID），我们只需要保留自己关注的捕获组：  
 
   ```re
   ^.{15}\S+ 14:(?<sourceId>[^:]*):[^:]*:DD5:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*:[^:]*
@@ -520,12 +552,9 @@ See: [Line 00](#line00) for examples.
 
 ### 00 行 (0x00): 游戏日志
 
-These are what this document calls "game log lines".
-Because these are not often used for triggers
-(other than `0839` and `0044` messages),
-the full set of LogTypes is not well-documented.
+游戏消息框中出现的所有系统消息均会生成与之对应的网络和 ACT 日志，类型为 `00` = 0x00。  
 
-(Pull requests welcome!)
+日志中第一个字段为消息的子类型。由于这类日志的诸多问题（见下文），很少用于触发器，所以目前没有完整的文档记录所有类型的含义。（欢迎提交 PR！）  
 
 #### 格式
 
@@ -557,38 +586,42 @@ ACT 日志示例：
 [18:01:21.000] ChatLog 00:0044:Tsukuyomi:Oh...it's going to be a long night.
 ```
 
-#### Don't Write Triggers Against Game Log Lines
+#### 避免将游戏日志用于触发器
 
 如果可以，撰写触发器时尽量避免使用游戏日志行，理由如下：
 
 - 不同语言客户端不同
 - 同类型日志的格式不一致
-- 措辞模糊不清
+- 文本措辞模糊不清
 - 文本内容随时可能被 SE 调整
 - 玩家在所有频道中均未选择一个消息分类时，不会产生相应日志 【add】
 - 涉及自定义聊天栏的插件可能使该类型日志失效
 
-Instead, the recommendation is to base your triggers on log lines that are not type `0x00`.
-Prefer using [NetworkBuff](#line26) line instead of "suffers the effect" game log lines.
-Prefer using the [NetworkStartsCasting](#line20) "starts using" line instead of the "readies" or "begins casting" game log lines.
+因此，建议触发器尽量避免使用 `0x00` 日志行作为事件源。  
 
-At the moment, there are some cases where you must use game log lines.
-However, unless you intend to support non-OverlayPlugin users in your plugin or trigger,
-use cases for these are dwindling,
-as newer log lines such as FFXIV_ACT_Plugin's [SystemLogMessage](#line41) and OverlayPlugin's [NpcYell](#line266),
-[BattleTalk2](#line267), and [Countdown](#line268) have gradually replaced the need for game log lines.
+得益于 FF14 解析插件和 Overlay 近期的更新，其他类型的日志行已经可以覆盖绝大多数其他 `0x00` 行中的有用内容，如：   
+- 使用 `0x14` 行的[开始咏唱](#line20)代替 “开始咏唱某技能” 的游戏日志；
+- 使用 `0x15` 行的[单体技能](#line21)代替 “使用了某技能” “使用了某物品” 的游戏日志；
+- 使用 `0x1A` 行的[添加状态](#line26)代替 “获得了某状态” 的游戏日志；
+- 使用 `0x29` 行的[系统日志](#line41)，包含了游戏日志中很多其它子类型的原始信息；
+- 使用 `0x104` 行的[进战状态](#line260)代替 “战斗开始” 的游戏日志；
+- 使用 `0x10A` 行的[实体喊话](#line266)、`0x10B` 行的[副本气泡](#line267)代替副本台词/旁白的游戏日志；
+- 使用 `0x10C` 行的[倒计时](#line268)、`0x10D` 行的[倒计时取消](#line269)代替 “开始/中断倒计时” 的游戏日志；
+- 寻找更根本的事件源，副本中台词以外的机制信息通常伴随其它实际控制实体使用技能、获取状态等的日志类型。
 
-If there are any remaining cases where a 00-line appears,
-but no other corresponding log line seems to exist,
-please file an issue in the [OverlayPlugin](https://github.com/OverlayPlugin/OverlayPlugin/issues) 仓库中提交 issue,
-so that it can be investigated and potentially added.
+然而，确实有一些情况下其他日志行并不包含 00 行中的有效信息。
+如果你觉得某种当前未包含的日志类型（不含发言/默语频道）在触发器中有用，
+可以在[OverlayPlugin 仓库中提交 issue](https://github.com/OverlayPlugin/OverlayPlugin/issues)，
+以便开发者调查并实际添加。
+
+注：这不包含发言频道。
 
 <a name="line01"></a>
 
 ### 01 行 (0x01)：切换区域
 
-This message is sent when first logging in and whenever the zone is changed.
-
+此日志在切换区域时生成。ACT 已开启后启动游戏，或游戏已开启后启动 ACT，也均会生成该日志，所以此日志很适合用于初始化。  
+  
 #### 格式
 
 ```log
@@ -611,14 +644,17 @@ ACT 日志示例：
 [14:22:04.549] Territory 01:31F:Alphascape (V2.0)
 ```
 
-Note that the "name" of the zone is the instance name when available,
-or the raw zone name if not.
+- `id`  
+  区域的特征 id，详见[区域信息](../../resources/zone_info.ts)。
+
+- `name`
+  区域的名称，受语言影响。当区域没有用于展示的实际名称时，显示为区域名称的原始文本。  
 
 <a name="line02"></a>
 
 ### 02 行 (0x02)：主控玩家
 
-This redundant message follows every [ChangeZone](#line01) message to indicate the name of the player.
+冗余日志，生成于每条[切换区域](#line01)日志后，包含当前玩家的名称和 ID。
 
 #### 格式
 
@@ -646,8 +682,7 @@ ACT 日志示例：
 
 ### 03 行 (0x03)：添加实体
 
-This message is sent when a new object is added to the scene or
-becomes close enough to the player that they can view its actions.
+新实体被添加到玩家客户端时，生成此日志。
 
 #### 格式
 
@@ -679,24 +714,32 @@ ACT 日志示例：
 [21:35:11.402] AddCombatant 03:4000B36a:Catastrophe:00:46:0000:00::5631:6358:57250:57250:0:10000:0:0:0:0:0:-4.792213E-05
 ```
 
-This combatant may be invisible and fake.  The real ones have more HP.
-For example, at the start of Deltascape V2.0 you will see messages like the
-latter 5 examples above.
+- `job`
+  10 进制的职业 ID。
 
-In heavy zones (e.g. Eureka), combatants may be culled if there are too many
-things nearby.
-Usually other players are culled first, but mobs can be as well.
-Eureka NMs (and S ranks) solve this by having a flag on them
-that allows them to be seen via AddCombatant message from anywhere in the zone,
-which is why it is possible to write triggers for when these pop.
+- `level`
+  16 进制的等级，如 `5A` 代表 90 级。
+
+- `ownerId`
+  召唤物主人的 ID，仅召唤物有效。 
+
+- `worldId`/`world`
+  玩家所属服务器的信息，仅玩家有效。
+
+- `?`
+  已经弃用的技力，为保证日志格式不变而保留相应字段。
+
+玩家与实体的距离缩短、同屏实体数下降导致实体出现时，也会导致实体添加到客户端并生成此日志。  
+注：S 级狩猎怪、优雷卡恶名精英等实体带有一个优先显示的实体标签，使其在地图内任意距离下均可显示，同时生成此日志。
+基于这点，可以写出提示 S 级狩猎的触发器和插件。
 
 <a name="line04"></a>
 
 ### 04 行 (0x04)：移除实体
 
-This message is sent when an object is removed from the scene, either because
-the player has moved too far away from it, it has died, or the player has
-changed zones.
+实体从玩家客户端被移除时，生成此日志。与添加实体类似，实体不仅会在切换地图或死亡时移除，也会在同屏实体过多、距离过远时移除。  
+
+各字段的含义与[添加实体](#line03)完全一致，不再赘述。
 
 #### 格式
 
@@ -724,9 +767,9 @@ ACT 日志示例：
 
 ### 11 行 (0x0B)：队员列表
 
-This line represents the players currently in the party, and is sent whenever the party makeup changes.
+该日志行在小队或团队【？】成员变化时生成，包含队员数和所有队员的 ID。
 
-This data is not necessarily sorted in the same order as the in-game party UI.
+【跨服有效吗？】
 
 #### 格式
 
@@ -752,12 +795,13 @@ ACT 日志示例：
 
 <a name="line12"></a>
 
-### 12 行 (0x0C)：玩家数据
+### 12 行 (0x0C)：玩家属性
 
-This message is sent whenever your player's stats change and upon entering a new zone/instance.
+玩家的属性变化时，或进入新区域时生成该日志。【进入新区域？】
 
-This is only emitted for the local player.
-It is not possible to automatically pull other players' stats.
+仅对自身有效，其他人的属性无法获取。
+
+【localContentId？】
 
 #### 格式
 
@@ -787,12 +831,10 @@ ACT 日志示例：
 
 ### 20 行 (0x14)：技能咏唱
 
-For abilities with cast bars,
-this is the log line that specifies that a player or a monster has started casting an ability.
-This precedes a [NetworkAbility](#line21),
-[NetworkAOEAbility](#line22),
-or [NetworkCancelAbility](#line23)
-where it uses the ability or is interrupted.
+当实体咏唱技能时生成此日志。
+
+当技能咏唱成功时，会相应地生成[单体技能](#line21)或[群体技能](#line22)日志；  
+咏唱失败、被中断时，会会相应地生成[取消咏唱](#line23)日志。
 
 #### 格式
 
@@ -822,22 +864,22 @@ ACT 日志示例：
 [12:48:36.131] StartsCasting 14:40024FCE:The Manipulator:13D0:Seed Of The Sky:E0000000::2.70:8.055649:-17.03842:10.58736:-4.792213E-05
 ```
 
-These lines are usually (but not always) associated with game log lines that either look like
-`00:282B:Shinryu readies Earthen Fury.`
-or `00:302b:The proto-chimera begins casting The Ram's Voice.`
+该日志通常与一条 `0x00` [游戏日志](#line00)同时产生，如：
+- `00:282B:Shinryu readies Earthen Fury.`
+- `00:302b:The proto-chimera begins casting The Ram's Voice.`
 
-#### Cast Times
+此日志行中的 `x` `y` `z` `heading` 均为 ACT 从定期轮询内存时储存的实体数据中读取的数据。  
+对于很多副本机制，不可见实体在咏唱前一瞬间才被设置到指定位置，或实体在读条开始时正在大幅度移动、转身，这些都会造成这些字段数据错误。  
+所以 OverlayPlugin 额外添加了 [网络咏唱](#line263) 日志行，包含从网络包中获取的准确坐标和面向信息，与本条日志同时生成。
 
-There are some caveats that affect the accuracy of cast times in the log.
+#### 咏唱时间
 
-For player casts, the log line provides precision to a thousandth of a second.
-However, the game itself rounds these to hundredths.
+有一些影响日志中咏唱时间的额外因素：
 
-Some boss casts with special animations have a longer effective cast time than what the log says.
-P8S's High Concept cast is one such example.
-The actual cast bar is much longer than the log would indicate.
-This is because the ability actually finishes casting partway through the cast bar,
-and the actual damage comes from a different ability.
+日志中玩家的咏唱精确到千分秒（1 ms），然而游戏中实际使用的数值舍至百分秒（10 ms）。
+
+某些 Boss 施法的实际读条时间比日志显示得长很多，如 P8s 的概念支配、绝欧米茄的狂暴等。  
+这是因为该技能实际上在读条时已经完成施法了，实际伤害则来自于不同的能力。
 
 <a name="line21"></a>
 
@@ -2175,17 +2217,15 @@ These are lines emitted directly by the ffxiv plugin when something goes wrong.
 
 ## OverlayPlugin Log Lines
 
-If you are using OverlayPlugin,
-it will emit extra log lines that are not part of the ffxiv plugin.
-The ids of these lines start at 256 and go up.
-Any id between 0-255 is reserved for the ffxiv plugin.
+如果你在 ACT 中使用 OverlayPlugin（注：这是国服整合版内置的必备插件），则会额外解析其他的日志类型。
+`0x100` = 256 开始的日志类型由 OverlayPlugin 生成，而 `0x00-0xFF` = 0-255 的日志类型保留给 FF14 解析插件。 
 
 <a name="line256"></a>
 
 ### 256 行 (0x100)：注册插件
 
-This line is emitted into logs when any custom logs are registered with OverlayPlugin.
-This is so that it is obvious which log lines and versions to expect for a given log file.
+当使用 OverlayPlugin 注册任何自定义日志类型时，生成该日志。
+这样可以清楚地看出当前日志文件包含了什么版本的哪些额外日志行。
 
 #### 格式
 
@@ -2215,21 +2255,24 @@ ACT 日志示例：
 
 ### 257 行 (0x101)：场地特效
 
-This message is sent to cause a specific visual effect to render
-in the game client during instanced content.
-MapEffect lines are not tied to any particular actor or action
-but may provide visual-based information about how an upcoming mechanic will resolve.
+此日志在副本实例中产生场地特效时生成。  
 
-For example,
-after Aetheric Polyominoid or Polyominoid Sigma casts in P6S,
-MapEffect messages are sent to cause the game client to render  '+' and 'x' effects on specific map tiles,
-indicating to the player which tiles will later be rendered unsafe by Polyominous Dark IV.
+场地特效不依赖任何实体或技能，部分机制在判定前只有该日志生成，此时只有场地特效日志行可以用于判断接下来的机制。
 
-This can also include things like:
+同一处特效可能在生成、激活（如即将判定时的发光、有人踩塔时塔变亮）、消失时各生成一条不同的日志。
 
-- meteor graphics / bridges breaking in Amaurot
-- the eye location in DSR
-- P8S torch effects
+特效的具体效果可能仅是视觉上的，如：  
+- 绝龙诗和绝欧米茄的眼睛；   
+- 六根山的水、火线；  
+- P8s 本体运动会、六根山老二、阿罗阿罗岛老一的塔；  
+- P9 地裂的地板线条；  
+也可能包含物理模型的实际变化，如： 
+- P9 击退前四个方向生成的墙；  
+- P12 连线地板的消失与恢复；  
+- 亚马乌罗提的桥断裂；【？】  
+- 四人本开路【？】  
+
+需要注意，一些机制可能看起来与上面的例子类似，但是实际上使用的是不可选中的实体。
 
 #### 格式
 
@@ -2255,37 +2298,24 @@ ACT 日志示例：
 [20:07:48.733] 257 101:800375A5:00020001:05:00:0000
 ```
 
-The `instance` parameter is identical to `instance` in an [actor control line](#line33).
-See above for more information.
+- `instance` 
+  见[副本实例](#副本实例)。
 
-The `flags` parameter identifies the visual effect that will be rendered in the game.
-For example,
-in P6S, `00020001` flags equates to a `+`-shaped tile and
-`00400020` flags equates to an `x`-shaped tile.
-Flags do not appear to be unique across multiple instances:
-as the above examples illustrate
-the flags `00020001` are used in both P5S and P6S to render completely different visual effects.
-
-That said,
-it does appear from initial analysis that when a map effect is rendered,
-a second MapEffect line with `00080004` flags is sent at the conclusion of the effect,
-which may correspond to removal of the effect.
-This appears to be consistent behavior across several fights so far,
-but more information is needed.
-
-The `location` parameter indicates the location in the current instance where the effect will be rendered.
-Locations are not consistent across instances and appear to be unique to each instance.
-E.g., a location of '05' in P6S corresponds to one of the 16 tiles on the map floor,
-whereas the '05' location in P5S appears to correspond to different map coordinates.
+- `flags`
+  表明产生的是何种效果，与各个副本实例有关。如：
+  - P6s：
+    `00020001` 代表 `+` 形格子出现，`00400020` 代表 `×` 形格子出现。
+    `00080004` 代表 消失【？？？】
+- `location`
+  表明效果产生的具体位置，与各个副本实例有关。
+  即便相同类型的效果，其 `location` 可能也并不相同，如：
+  1【龙眼】
 
 <a name="line258"></a>
 
 ### 258 行 (0x102)：危命任务
 
-This line indicates changes in fates on the map.
-This includes when fates are added,
-removed,
-or their progress has changed.
+此日志行在危命任务生成、移除、进度变化时生成。
 
 #### 格式
 
@@ -2315,8 +2345,7 @@ ACT 日志示例：
 
 ### 259 行 (0x103)：遭遇战
 
-This line is like [FateDirector](#line258),
-but is for Critical Engagements in Bozja.
+此日志行与[危命任务](#line257)类似，在博兹雅遭遇战生成、移除、进度变化时生成。
 
 #### 格式
 
@@ -2346,20 +2375,26 @@ ACT 日志示例：
 
 ### 260 行 (0x104)：进战状态
 
-This log line tracks in combat state.
-`inGameCombat` is whether FFXIV itself considers you in combat.
-`inACTCombat` is whether ACT considers you in combat,
-which may include other people around you and not yourself
-and also takes your ACT encounter settings into consideration.
+该日志行记录 ACT 和游戏客户端内的战斗状态。
 
-`isACTChanged` and `isGameChanged` represent whether the state has changed
-since the last log line.
-This allows triggers to be written for when a particular one changes,
-as lines are emitted if either changes.
-These are both true the first time the log is written.
+- `inGameCombat`
+  游戏客户端内是否处于战斗状态。
 
-OverlayPlugin uses `inACTCombat` to re-split your encounters during import
-based on how they were split when they were originally recorded.
+- `inACTCombat`
+  ACT 是否认为当前处于战斗状态。这可能受到周围其他队友战斗状态的影响。
+
+- `isACTChanged` `isGameChanged`
+  `inACTCombat` 字段与 ACT 中脱战多久结束战斗的设置有关，
+  若该项设置时间短于副本上天，会使 `inACTCombat` 从 `1` 变为 `0`，落地后再变为 `1`。
+  所以只用前两个字段写触发器会导致在不同客户端上运行结果可能不一致。
+  
+  所以添加了这两个字段用于触发器判断自己关心的一项（通常是 `inGameCombat` 的改变），如：  
+  - 脱战：`104:.:0:.:1`  
+  - 进战：`104:.:1:.:1` （可以代替倒计时结束的 “战斗开始”）  
+
+  当首次产生此日志时，二者皆为 `1` (true)。
+
+导入日志时，OverlayPlugin 会用 `inACTCombat` 字段重新分割战斗，从而保证分割方式与原本记录时一致。
 
 #### 格式
 
@@ -2389,23 +2424,26 @@ ACT 日志示例：
 
 ### 261 行 (0x105)：实体内存
 
-OverlayPlugin has a `getCombatants` function which returns the state of combatants in the game.
-However, it is hard to know when it is safe to call this function
-and know that combatants have moved into position (or changed model or changed heading).
-These lines give more granular information when combatants change their status.
-Please note that this is still polling memory (so timing may be racy)
-and there are some heuristics to not emit too many lines (so data may be imprecise).
+OverlayPlugin 通过轮询内存中的实体属性，在检测到属性变化时生成此日志行。
 
-For more information,
-see the [class definition](https://github.com/OverlayPlugin/OverlayPlugin/blob/main/OverlayPlugin.Core/MemoryProcessors/Combatant/LineCombatant.cs#L27) in OverlayPlugin.
+注意轮询内存并非由任何修改实体属性的网络包触发，可能造成时间上的不稳定和延后。
+出于同样的原因，此日志行所含数据并不稳定，甚至可能同一个实体连续出现两次。
+此外，此日志行包含大量字段，匹配时的性能负担更重。
+如果有其他选择，请尽量避免在触发器中使用此日志。  
 
-There are three types of this line:
+对于当前版本而言，此日志行中的重要数据包括：`BNpcNameID`、`TransformationId`、`WeaponId`、`TargetID`、`ModelStatus`，
+这些属性的变化目前并不反映于任何其它日志行。未来可能引入针对这些属性的[实体控制]【？】日志子类型，从而准确获取这些属性的变化。  
+更多信息：参考 [LineCombatant](https://github.com/OverlayPlugin/OverlayPlugin/blob/main/OverlayPlugin.Core/MemoryProcessors/Combatant/LineCombatant.cs#L27)。
 
-- Add: emits all initial fields for this combatant that have non-default values
-- Change: emits all fields that have changed
-- Remove: no fields, combatant is being removed
+此日志行有三个类型：
 
-Each line may contain an arbitrary number of field name / value pairs.
+- Add: 包含新生成的实体所有与默认值不同的属性
+- Change: 包含已有实体所有变化的属性
+- Remove: 实体被移除，不包含任何属性
+
+每行可以包含任意对属性与值。
+
+注意：国服 CafeACT 整合中修改了 OverlayPlugin 中此日志行的逻辑，各个字段默认顺序与原版不同。如果你的触发器使用了此日志行中的字段值，请勿在未测试的情况下假定字段的先后顺序。
 
 #### 格式
 
@@ -2435,24 +2473,20 @@ ACT 日志示例：
 
 ### 262 行 (0x106)：加密数据
 
-Square Enix obfuscates (among other things) ability names, status names, and messages
-in current savage and ultimate content in the game data itself.
-This is to prevent data mining.
-However, as these ability names need to be displayed by the game itself
-these ability names are sent as network data upon zoning in.
-After the next major patch, the game files will usually contain the real values.
+Square Enix 会在零式和绝本中对部分技能名、状态名、台词内容等信息加密，防止解包提前获取相关信息。
+在下一个大版本更新之后，游戏文件会包含解密后的真实值。
 
-These lines display the currently obfuscated abilities
-for the current zone for the current game locale.
+由于这些文本在战斗中需要客户端实际显示出来，所以在进入副本区域时会收到包含解密文本的网络数据包。
+此日志行从网络包获取并显示当前区域所含的当前语言下的所有加密文本。
 
-Note that `:` characters are not escaped even if the game abilities have a `:` in them.
-It is recommended to use the network log line format to parse these lines for that reason.
+注意：对于英文等客户端，文本中的冒号 `:` 会与 ACT 日志的分隔符 `:` 混淆。
+这种情况也可能出现于其他日志中，如 海德林晖光歼灭战：`The Minstrel's Ballad: Hydaelyn's Call`。
+这种情况下建议仅使用网络日志，或在正则中添加对冒号后是否是空格的检查。
 
-These values may also contain special unicode character sequences
-that the game client will replace with placeholder values,
-such as the current player's name.
-CR and LF characters are also escaped and will need to be unescaped.
-See the logs below for an example.
+文本内容还可能包含特殊的 unicode 占位符，如下面日志中的 � (U+FFFD)，会被客户端替换为玩家名等实际值。
+CR `\r` 和 LF `\n` 换行符也会被转义，并且需要取消转义。
+
+详见日志示例。
 
 #### 格式
 
