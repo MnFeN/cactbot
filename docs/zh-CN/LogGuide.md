@@ -109,7 +109,7 @@
     - [31 行 (0x1F)：量谱更新](#31-行-0x1f量谱更新)
       - [格式](#格式-17)
       - [示例](#示例-17)
-    - [33 行 (0x21)：副本导演](#33-行-0x21副本导演)
+    - [33 行 (0x21)：副本演出](#33-行-0x21副本演出)
       - [格式](#格式-18)
       - [示例](#示例-18)
     - [34 行 (0x22)：切换可选](#34-行-0x22切换可选)
@@ -456,7 +456,7 @@ ACT 日志格式由以下几部分组成：
 
 ### 副本实例
 
-某些日志中包含一个四字节的副本实例 (Instance) 字段，如[副本导演](#line33)、[系统日志](#line41)。  
+某些日志中包含一个四字节的副本实例 (Instance) 字段，如[副本演出](#line33)、[系统日志](#line41)。  
 前两字节为更新类型，如 `8003` 代表实例内容更新，`8004` 也代表同样的内容（但是受信？）。  
 后两字节为 `InstanceContentType`，可在[实例内容表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/InstanceContent.csv)中查找。  
 
@@ -869,8 +869,8 @@ ACT 日志示例：
 - `00:302b:The proto-chimera begins casting The Ram's Voice.`
 
 此日志行中的 `x` `y` `z` `heading` 均为 ACT 从定期轮询内存时储存的实体数据中读取的数据。  
-对于很多副本机制，不可见实体在咏唱前一瞬间才被设置到指定位置，或实体在读条开始时正在大幅度移动、转身，这些都会造成这些字段数据错误。  
-所以 OverlayPlugin 额外添加了 [网络咏唱](#line263) 日志行，包含从网络包中获取的准确坐标和面向信息，与本条日志同时生成。
+对于很多副本机制，不可见实体在咏唱前一瞬间才被设置到指定位置，或实体在读条开始时正在大幅度移动、转身，这些都会造成这些字段**数据错误**，这经常造成使用 `0x14` 日志行的触发器产生错误结果。  
+所以 OverlayPlugin 额外添加了[网络咏唱](#line263)日志行，包含从网络包中获取的准确坐标和面向信息，与本条日志同时生成。如果你需要咏唱的坐标和方向信息，请使用[网络咏唱](#line263)代替。  
 
 #### 咏唱时间
 
@@ -1142,15 +1142,13 @@ You can examine these to find damage down and vulnerability percentages.
 
 ### 22 行 (0x16)：群体技能
 
-This is an ability usage in game that ends up hitting multiple actors or no actors at all.
-
-See: [NetworkAbility](#line21) for a discussion of the difference between `NetworkAbility` and `NetworkAOEAbility`.
+对于多目标或 0 目标技能，技能判定的日志行不是[单体技能](#line21)，而是此日志。详见[单体技能](#line21)。
 
 <a name="line23"></a>
 
 ### 23 行 (0x17)：取消咏唱
 
-For abilities with cast bars, this is the log line that specifies that the cast was cancelled either due to movement or an interrupt and it won't go off.
+咏唱因主动取消或移动而中断、或咏唱被打断时生成此日志。 【插言 死亡 esc ？】
 
 #### 格式
 
@@ -1180,19 +1178,15 @@ ACT 日志示例：
 
 ### 24 行 (0x18)：持续伤害
 
-HoT (heal over time) and DoT (damage over time) amounts.
-For most DoTs and HoTs,
-this line conveys an aggregated tick for every DoT/HoT source on that target from all sources.
+持续伤害 (DoT) 的伤害量，及持续治疗 (HoT) 的治疗量，下文统称为`效果量`。
 
-The reason why there is such a discrepancy between ACT and fflogs about dots
-is that ff14 does not return the exact tick amounts for every active dot.
-Instead, if a boss has 20 dots applied to it,
-then it returns the total tick amount for all of these dots.
-Parsers are left to estimate what the individual dot amounts are.
+对于大多数 DoT 和 HoT，服务器不会单独发送其效果量，
+而是在服务器每三秒一次的判定（即通常所说的“一跳”）时，发送该目标受到的**全部来源**的 DoT 或 HoT 之**总和**。
+这便是 ACT 与 FFLogs 等伤害解析软件只能根据每个技能的威力和 buff 加权估算此类效果量的原因。
 
-However, for ground effect DoTs/HoTs, these have their own packets.
-This is the only case where the `effectId` is populated.
-For these, the `damageType` field is a number id that corresponds to the `AttackType` table.
+也有少数例外：地面放置类技能（如黑骑的腐秽大地、忍者的土遁）和持续施放技能（如机工的喷火、青魔的鬼宿脚）在初始伤害判定后，服务器会单独发送网络包，生成对应的此日志。【HoT？】【持续？】【间隔？】
+`effectId` 等字段仅在此情况下有实际值。
+For these, the `damageType` field is a number id that corresponds to the `AttackType` table.【？】
 
 #### 格式
 
@@ -1224,8 +1218,8 @@ Ground effect dots get listed separately.
 
 ### 25 行 (0x19)：实体死亡
 
-This message corresponds to an actor being defeated and killed.
-This usually comes along with a game log message such as `You defeat the worm's heart.`
+此日志生成于实体被打倒时。  【延迟？】
+通常与一条[游戏日志](#line00)同时出现，如 `You defeat the worm's heart.`   
 
 #### 格式
 
@@ -1444,7 +1438,14 @@ and then removes it later.
 
 ### 28 行 (0x1C)：场地标点
 
-This message indicates a floor waymarker was added or deleted.
+场地标点被添加或移除时生成此日志。注意插件的本地标点不会产生网络数据，也不会有此日志生成。
+
+- `id`:
+
+  | ID  | 标点 |     | ID  | 标点 |     | ID  | 标点 |     | ID  | 标点 |
+  |:---:|:----:| --- |:---:|:----:| --- |:---:|:----:| --- |:---:|:----:|
+  | 0   | `A`  |     | 1   | `B`  |     | 2   | `C`  |     | 3   | `D`  |
+  | 4   | `1`  |     | 5   | `2`  |     | 6   | `3`  |     | 7   | `4`  |
 
 #### 格式
 
@@ -1468,24 +1469,22 @@ ACT 日志示例：
 [19:27:23.534] WaymarkMarker 1C:Add:4:10FF0001:Tini Poutini:76.073:110.588:0
 ```
 
-#### Combatant Marker Codes
-
-| ID  | Description |
-| --- | ----------- |
-| 0   | A           |
-| 1   | B           |
-| 2   | C           |
-| 3   | D           |
-| 4   | 1           |
-| 5   | 2           |
-| 6   | 3           |
-| 7   | 4           |
-
 <a name="line29"></a>
 
 ### 29 行 (0x1D)：实体标点
 
-This message indicates a target marker placed above or removed from a combatant's head by a player.
+实体头顶的标点被添加或移除时生成此日志。注意插件的本地标点不会产生网络数据，也不会有此日志生成。
+
+- `id`: 【新的？】
+
+  | ID  | 标点   |     | ID  | 标点   |     | ID  | 标点   |     | ID  | 标点   |
+  |:---:|:------:| --- |:---:|:------:| --- |:---:|:------:| --- |:---:|:------:|
+  | 0   | 攻击 1 |     | 5   | 锁链 1 |     | 10  | 方形   |     | 14  | 攻击 6 |
+  | 1   | 攻击 2 |     | 6   | 锁链 2 |     | 11  | 圆圈   |     | 15  | 攻击 7 |
+  | 2   | 攻击 3 |     | 7   | 锁链 3 |     | 12  | 十字   |     | 16  | 攻击 8 |
+  | 3   | 攻击 4 |     | 8   | 禁止 1 |     | 13  | 三角   |     | 17  |        |
+  | 4   | 攻击 5 |     | 9   | 禁止 2 |     |     |        |     |     |        |
+
 
 #### 格式
 
@@ -1509,31 +1508,14 @@ ACT 日志示例：
 [22:54:32.566] SignMarker 1D:Add:6:10FF0001:Tini Poutini:10FF0002:Potato Chippy
 ```
 
-#### Floor Marker Codes
+#### Floor Marker Codes【原文错了】
 
-| ID  | Description |
-| --- | ----------- |
-| 0   | Hexagon 1   |
-| 1   | Hexagon 2   |
-| 2   | Hexagon 3   |
-| 3   | Hexagon 4   |
-| 4   | Hexagon 5   |
-| 5   | Chain 1     |
-| 6   | Chain 2     |
-| 7   | Chain 3     |
-| 8   | Ignore 1    |
-| 9   | Ignore 2    |
-| 10  | Square      |
-| 11  | Circle      |
-| 12  | Plus        |
-| 13  | Triangle    |
 
 <a name="line30"></a>
 
 ### 30 行 (0x1E)：移除状态
 
-This is the paired "end" message to the [NetworkBuff](#line26) "begin" message.
-This message corresponds to the loss of effects (either positive or negative).
+此日志与[添加状态](#line26)相对应，在效果移除时生成。各字段含义详见[添加状态](#line26)。
 
 #### 格式
 
@@ -1563,7 +1545,9 @@ ACT 日志示例：
 
 ### 31 行 (0x1F)：量谱更新
 
-Info about the current player's job gauge.
+玩家量谱刷新时产生此日志。  
+切换地图、职业【？】时也【可能？】产生此日志；即使满量谱导致量谱数据溢出而未变化时也会产生此日志。
+该日志仅对自己有效，网络包中不直接包含其他人的量谱数据。
 
 #### 格式
 
@@ -1618,13 +1602,10 @@ There are a number of references for job gauge memory:
   1) [cactbot FFXIVProcess code](https://github.com/OverlayPlugin/cactbot/blob/a4d27eca3628d397cb9f5638fad97191566ed5a1/CactbotOverlay/FFXIVProcessIntl.cs#L267)
   1) [Dalamud code](https://github.com/goaaats/Dalamud/blob/4ad5bee0c62128315b0a247466d28f42264c3069/Dalamud/Game/ClientState/Structs/JobGauge/NINGauge.cs#L15)
 
-Unfortunately, network data about other player's gauge is not sent.
-You are unable to see the abilities of other players, only your own.
-(This is probably by design to cut down on the amount of network data sent.)
 
 <a name="line33"></a>
 
-### 33 行 (0x21)：副本导演
+### 33 行 (0x21)：副本演出
 
 See also: [nari director update documentation](https://xivlogs.github.io/nari/types/director.html)
 
@@ -1665,7 +1646,8 @@ ACT 日志示例：
 [14:18:39.012] Director 21:80034E5B:40000007:00:01:00:00
 ```
 
-See [Instance Content ID](#instance-content-id) for more details about the `instance` parameter.
+- `instance`
+  见[副本实例](#副本实例)。
 
 Wipes on most raids and primals these days can be detected via this regex in 6.2:
 `21:........:4000000F:`.
@@ -2115,7 +2097,8 @@ Here are two network log lines:
 00|2022-01-11T16:28:50.0000000-08:00|0839||The shell mound will be sealed off in 15 seconds!|3a0befeef04e203b^M
 ```
 
-See [Instance Content ID](#instance-content-id) for more details about the `instance` parameter.
+- `instance`
+  见[副本实例](#副本实例)。
 `00830054` represents instanced content for [The Dead Ends](https://xivapi.com/InstanceContent/84?pretty=true).
 
 `7DC` is the `id`, which [corresponds](https://xivapi.com/LogMessage/2012?pretty=true) to:
