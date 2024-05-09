@@ -210,27 +210,18 @@
 ## 浏览日志
 关于 ACT 日志、网络日志、网络数据的详细含义，见下文[术语表](#术语表)。
 
-### 浏览 ACT 日志
+### 直接浏览日志
 
-#### 实时查看 
+#### ACT 日志
+
 战斗状态下，ACT 会将 ACT 解析日志整理至本场战斗下。  
 若想浏览某场战斗的 ACT 日志，点击 “首页” 选项卡，双击展开对应的区域，右键要浏览的战斗，点击 “查看 ACT 战斗日志”。  
 在该页面内，你可以使用正则过滤感兴趣的日志并复制结果，也可以测试你的正则是否可以正确匹配到感兴趣的日志。  
 ![view logs screenshot](images/logguide_viewlogs.png)  
 
-对于非战斗状态下的 ACT 日志，可以使用触发器记录并查看：  
-- Triggernometry  
-  新建触发器，填写需要查看的日志正则；  
-  新建动作：生成日志消息，日志等级如 “用户2”，日志文本填写感兴趣的内容（可以填写 `${_event}` 输出整行日志）；  
-  在 Triggernometry 触发器日志中浏览。  
-- Cactbot  
-  新建触发器，设置相应正则和指定区域；  
-  使用 `Console.Log(string message)` 输出感兴趣的内容；  
-  在插件页面的调试台内浏览。  
+对于非战斗状态下的 ACT 日志，如果对战斗状态并不敏感，可以简单地攻击木人进战开始记录，否则详见下文。  
 
-如果要记录的日志对战斗状态并不敏感，也可以简单地攻击木人进战开始记录。
-
-#### 导入旧日志
+#### ACT 日志（从日志文件导入）
 
 有时你重启 ACT 后想浏览之前的日志，或者你需要查看别人分享的日志制作触发器，你可以在 ACT 中重新导入这个日志：
 
@@ -244,27 +235,115 @@
 
 This will create encounters whose [logs you can view](#viewing-logs-after-a-fight).
 
-### 浏览网络日志
+#### 网络日志
 
 网络日志保存于上述 **Network_plugin_date.log** 日志文件中，直接打开即可查看。  
 推荐使用 Visual Studio Code 等专业软件，可以快速渲染长文本，支持正则搜索和过滤。  
 不要使用记事本打开。  
 
-### 浏览网络数据
-
-如果你想深入挖掘网络数据包中的更多信息，可以尝试将包含网络数据的日志文件导入 ffxivmon。
-
-首先，你需要开启 ACT 中 FF14 解析插件选项卡的 **(DEBUG) Dump all Network Data to logfile** 选项：  
+#### 网络数据
+<a name="networkdata"></a>
+如果你想深入挖掘网络数据包的内容，则需要开启 ACT 中 FF14 解析插件选项卡的 **(DEBUG) Dump all Network Data to logfile** 选项：  
 
 ![dump network data screenshot](images/logguide_dumpnetworkdata.png)
 
-然后，将该选项启用时生成的战斗日志导入 ffxivmon：
+此时将生成[网络数据](#line252)日志行，开启该选项时生成的日志会包含网络数据，可以导入 ffxivmon 等工具浏览。
 
 ![ffxivmon import screenshot](images/logguide_ffxivmon_import.png)
 
 此时便可浏览全部网络包的数据内容。
 
 ![ffxivmon screenshot](images/logguide_ffxivmon.png)
+
+### 使用触发器记录
+
+除了上文中直接浏览日志的方式以外，你也可以用 Cactbot、Triggernometry 等触发器插件将感兴趣的日志记录到插件日志中。  
+
+**例 1：记录所有[技能咏唱](#line20)的 ACT 日志**
+
+该类型的日志格式如下：  
+
+```log  
+[10:19:50.855] StartsCasting 14:103CDDB2:剑盾小b:DD5:深仁厚泽:103CDDB2:剑盾小b:1.500:27.68:-31.65:0.90:-1.75  
+```
+
+- Triggernometry
+
+  新建触发器：
+  - 正则：`^.{15}\S+ 14:`
+  - 事件源：`ACT 解析日志`
+  - 动作：生成日志消息
+    - 日志文本：`${_event}`（代表日志的完整文本）
+    - 触发器日志等级：选择一个合适的频道，如 “用户2”
+
+- Cactbot:
+
+  新建触发器：
+
+  ```javascript
+  Options.Triggers.push({
+      zoneId: ZoneId.MatchAll,
+      triggers: [
+          {
+              id: 'StartsCastingLog',
+              regex: /^20\|.+/,
+              run: (_, matches) => {
+                  console.log(matches);【是这么写的？】
+              }
+          },
+      ],
+  });
+  ```
+
+上述触发器会将所有网络数据转发至 Triggernometry 插件日志或 cactbot 控制台。  
+你可以进一步调整正则表达式或添加条件，以便过滤掉不感兴趣的内容（如玩家的咏唱、短读条的咏唱）。
+你也可以设置一些捕获组，将需要的字段格式化为更容易阅读的格式。  
+
+如：仅关注玩家（id 由 1 开头）的咏唱，按照 `剑盾小b: 深仁厚泽 (DD5) => 剑盾小b` 的格式输出：
+
+- 正则：
+  `^.{15}\S+ 14:1.{7}:(?<srcName>[^:]*):(?<abilityId>[^:]*):(?<abilityName>[^:]*):[^:]*:(?<tgtId>[^:]*)`
+
+- 日志文本：
+  - Triggernmoetry：  
+    `${srcName}: ${abilityName} (${abilityId}) => ${tgtName}`
+  - Cactbot：  
+    ```javascript
+    `${matches.srcName}: ${matches.abilityName} (${matches.abilityId}) => ${matches.tgtName}`
+    ```
+
+**例 2：记录所有[网络数据](#line252)**
+
+对于触发器，网络数据包含于网络日志中，仅在[开启输出网络数据选项](#networkdata)时生成对应的网络日志。  
+
+- Triggernometry
+
+  新建触发器：
+  - 正则：`^252\|`
+  - 事件源：`网络日志`
+  其它同上
+
+- Cactbot:
+
+  新建触发器：
+
+  ```javascript
+  Options.Triggers.push({
+      zoneId: ZoneId.MatchAll,
+      triggers: [
+          {
+              id: 'NetworkDataLog',
+              regex: /^252\|.+/,
+              run: (_, matches) => {
+                  console.log(matches);
+              }
+          },
+      ],
+  });
+  ```
+
+此时便可在 ACT 中直接浏览网络数据，你也可如前文所述修改正则以便过滤与格式化。  
+其他类型的网络日志亦然。
 
 ## 术语表
 
@@ -421,14 +500,28 @@ ACT 日志格式由以下几部分组成：
 - 使用 `BNpcId` `BNpcNameId` 代替实体名。  
 
 除了在日志行内查找外，可以用下述方式主动获取实体数据，如：
+
 - Cactbot/OverlayPlugin
-  - 通过 `GetCombatant()` 获取实体 `entity`，检索 `entity.属性`。  
+  - 通过 `getCombatant()` 获取实体 `entity`，检索 `entity.属性`。  
     详见 [OverlayPlugin 实体属性](https://github.com/OverlayPlugin/OverlayPlugin/blob/main/OverlayPlugin.Core/MemoryProcessors/Combatant/Common.cs#L96)。
   - OverlayPlugin Debug 悬浮窗，可显示自身位置等信息。
-- Triggernometry
-  - 通过表达式 `${_me.属性}` `${_entity[Name].属性}` `${_entity[ID].属性}` `${_entity[bnpcid=XXX].属性}` 检索指定实体属性。  
-    详见 [Triggernometry 实体属性](https://github.com/paissaheavyindustries/Triggernometry/blob/master/Source/Triggernometry/PluginBridges/BridgeFFXIV.cs#L189)、
-    [职业属性](https://github.com/paissaheavyindustries/Triggernometry/blob/master/Source/Triggernometry/Entity.cs#L97)。
+
+- Triggernometry  
+  - 通过表达式检索指定实体属性：  
+
+    | 检索方式 | 表达式 |  示例 |
+    |  :---:   | :---:  | :---: |
+    |   自身   | `${_me.属性}` | `${_me.heading}` | 
+    | 通过名称 | `${_entity[Name].属性}`  | `${_entity[木人].currenthp}`  | 
+    | 通过 ID  | `${_entity[hexID].属性}` | `${_entity[103CDDB2].jobCN2}` | 
+    | 通过其他属性 | `${_entity[特征属性=XXX].属性}` | `${_entity[bnpcid=12306].y}` | 
+
+    注意这只会返回第一个检索到的目标的属性，所以需要合理选择检索方式，确保仅会得到你需要的实体。
+
+    关于属性，详见 Triggernometry：  
+    - [实体属性](https://github.com/paissaheavyindustries/Triggernometry/blob/master/Source/Triggernometry/PluginBridges/BridgeFFXIV.cs#L189)  
+    - [职业属性](https://github.com/paissaheavyindustries/Triggernometry/blob/master/Source/Triggernometry/Entity.cs#L97)  
+    
   - 亦可自定义悬浮窗显示以上信息。
 
 ### 技能
@@ -483,7 +576,7 @@ ACT 日志格式由以下几部分组成：
 
 - 如果你在使用 Triggernometry 等插件，或想自己写正则：  
 
-  以[技能咏唱](#20-行-0x14技能咏唱)日志行为例：
+  以[技能咏唱](#line20)日志行为例：
 
   #### ACT 日志  
 
@@ -600,7 +693,7 @@ ACT 日志示例：
 因此，建议触发器尽量避免使用 `0x00` 日志行作为事件源。  
 
 得益于 FF14 解析插件和 Overlay 近期的更新，其他类型的日志行已经可以覆盖绝大多数其他 `0x00` 行中的有用内容，如：   
-- 使用 `0x14` 行的[开始咏唱](#line20)代替 “开始咏唱某技能” 的游戏日志；
+- 使用 `0x14` 行的[技能咏唱](#line20)代替 “开始咏唱某技能” 的游戏日志；
 - 使用 `0x15` 行的[单体技能](#line21)代替 “使用了某技能” “使用了某物品” 的游戏日志；
 - 使用 `0x1A` 行的[添加状态](#line26)代替 “获得了某状态” 的游戏日志；
 - 使用 `0x29` 行的[系统日志](#line41)，包含了游戏日志中很多其它子类型的原始信息；
@@ -2034,12 +2127,9 @@ ACT 日志示例：
 
 ### 41 行 (0x29)：系统日志
 
-This log line is sent when there are system log messages.
-As game chat log lines are read from memory in the FFXIV ACT plugin,
-[Line 41](#line41) can be sent both before or after the corresponding [Line 00](#line00).
-That said, they are usually sequential in the network log,
-and so there is no timing advantage to using one over the other,
-but the system log message will have a correct timestamp.
+部分[游戏日志](#line00)会相应地同时生成此日志行。
+相比于游戏日志的整秒数时间戳及随语言变化的文本，此日志行的时间准确、格式统一，是触发器的更好选择。
+由于解析插件并未涵盖所有类型的系统日志，并不是所有[游戏日志](#line00)均对应此日志，详见[避免将游戏日志用于触发器](#避免将游戏日志用于触发器)。
 
 ```log
 [10:38:40.066] SystemLogMessage 29:00:901:619A9200:00:3C
@@ -2076,7 +2166,8 @@ ACT 日志示例：
 [10:55:06.707] SystemLogMessage 29:8004001E:B3A:00:00:E0000000
 ```
 
-The `id` parameter is an id into the [LogMessage table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/LogMessage.csv).
+- `id`
+  日志类型，详见[LogMessage 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/LogMessage.csv)。
 
 id (hex) | Link | Shortened Message
 --- | --- | ---
@@ -2135,8 +2226,7 @@ Future work:
 
 ### 42 行 (0x2A)：状态列表3
 
-This line seems to be sent only for the current player and lists some status effects.
-More information is needed.
+此日志似乎只对当前玩家有效，会列出某些状态。需要深入研究。
 
 #### 格式
 
@@ -2175,11 +2265,12 @@ Parsed log lines are blank for this type.
 
 ### 252 行 (0xFC): 网络数据
 
+如果 ACT 解析插件中“输出网络数据”的选项已开启，则会在每个网络包接收时相应生成此日志，详见[浏览网络数据](#浏览网络数据)。
 If the setting to dump all network data to logfiles is turned on,
 then ACT will emit all network data into the network log itself.
 This can be used to import a network log file into ffxivmon and inspect packet data.
 
-Parsed log lines are blank for this type.
+Parsed log lines are blank for this type.+
 
 ![dump network data screenshot](images/logguide_dumpnetworkdata.png)
 
@@ -2201,7 +2292,7 @@ These are lines emitted directly by the ffxiv plugin when something goes wrong.
 ## OverlayPlugin Log Lines
 
 如果你在 ACT 中使用 OverlayPlugin（注：这是国服整合版内置的必备插件），则会额外解析其他的日志类型。
-`0x100` = 256 开始的日志类型由 OverlayPlugin 生成，而 `0x00-0xFF` = 0-255 的日志类型保留给 FF14 解析插件。 
+目前，`0x100` = 256 以后的日志类型由 OverlayPlugin 生成，而 `0x00-0xFF` = 0-255 的日志类型预留给 FF14 解析插件。 
 
 <a name="line256"></a>
 
@@ -2501,29 +2592,24 @@ ACT 日志示例：
 
 ### 263 行 (0x107)：网络咏唱
 
-This line contains extra data for ActorCast/StartsUsing network data.
+此日志与[技能咏唱](#line20)同时生成，包含网络包中的准确位置和面向信息。
 
-This line is always output for a given StartsUsing cast.
+- `x`/`y`/`z`/`heading`  
+  坐标和面向与咏唱技能的目标类型有关。  
+  - 技能无目标（即目标不是咏唱者本身或“环境”）：
+    坐标和面向采用咏唱者的数据。
+  - 技能目标为某个实体：
+    坐标采用目标的数据，而面向为咏唱者到目标的方向。
+    注意如果实际施放的方向可能并不是
+  - 技能为对地面施放，与实体无关：
+    坐标和面向采用目标位置的数据。【面向？】
+    如：青魔法师投弹
+  - 技能为对某个方向施放，与实体无关：
+    坐标采用咏唱者的数据，面向为技能的施放方向。
 
-If the ability is non-targeted, `x`/`y`/`z`/`heading` will be the source actor's position
-and heading data.
-
-If the ability is actor-targeted, then `x`/`y`/`z` will be the target actor's current
-position, and `heading` will be the angle from the source actor to the target actor.
-
-If the ability purely targets the ground (such as BLU Bomb Toss), then
-`x`/`y`/`z`/`heading` be the position data for the target location.
-
-If the ability purely targets a direction (such as BLU Aqua Breath), then  `x`/`y`/`z`
-will be the source actor's position, while `heading` is the direction in which the
-ability was cast.
-
-Note that the important part is how the ability is *targeted*, not its actual AoE
-type. For example, Pneuma hits everything in a line, as if it were targeting a direction.
-However, it is targeted on an actor, and if said actor moves during the cast, then the
-cast will "follow" the target. Thus, if the ability has a target (and the target is
-neither the caster nor the environment), then the actual location of the target is a
-better indication of where it will hit.
+注意判断依据是技能的目标，而不是技能的实际效果。
+比如对目标施放的直线 AoE（如点名直线分摊）属于第二类，
+而引导面向的技能（如绝龙诗 P3）属于第四类。
 
 #### 格式
 
