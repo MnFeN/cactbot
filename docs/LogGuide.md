@@ -96,12 +96,12 @@ This guide was last updated for:
     - [Structure](#structure-14)
     - [Regexes](#regexes-14)
     - [Examples](#examples-14)
-    - [Combatant Marker Codes](#combatant-marker-codes)
+    - [Floor Marker Codes](#floor-marker-codes)
   - [Line 29 (0x1D): NetworkTargetMarker (Player Marker)](#line-29-0x1d-networktargetmarker-player-marker)
     - [Structure](#structure-15)
     - [Regexes](#regexes-15)
     - [Examples](#examples-15)
-    - [Floor Marker Codes](#floor-marker-codes)
+    - [Combatant Marker Codes](#combatant-marker-codes)
   - [Line 30 (0x1E): NetworkBuffRemove](#line-30-0x1e-networkbuffremove)
     - [Structure](#structure-16)
     - [Regexes](#regexes-16)
@@ -1598,7 +1598,7 @@ Parsed Log Line Examples:
 
 <!-- AUTO-GENERATED-CONTENT:END -->
 
-#### Combatant Marker Codes
+#### Floor Marker Codes
 
 | ID  | Description |
 | --- | ----------- |
@@ -1653,7 +1653,7 @@ Parsed Log Line Examples:
 
 <!-- AUTO-GENERATED-CONTENT:END -->
 
-#### Floor Marker Codes
+#### Combatant Marker Codes
 
 | ID  | Description |
 | --- | ----------- |
