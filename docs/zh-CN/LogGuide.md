@@ -9,12 +9,12 @@
 译者注：为方便初学者理解，本文会适当附上 Cactbot 和 Triggernometry 中使用相关内容的案例。  
 
 最近更新适配：
-- 2024.5.3
+- 2024.5.16
 - [FF14](https://na.finalfantasyxiv.com/lodestone/special/patchnote_log/) Patch 6.58
 - [FFXIV Plugin](https://github.com/ravahn/FFXIV_ACT_Plugin/releases) Patch 2.7.0.1
 - [OverlayPlugin](https://github.com/OverlayPlugin/OverlayPlugin/releases) Patch 0.19.28
 - [Cactbot](https://github.com/OverlayPlugin/cactbot) Patch 0.31.4
-- [Triggernometry](https://github.com/paissaheavyindustries/Triggernometry) Patch 1.2.0.0
+- [Triggernometry](https://github.com/paissaheavyindustries/Triggernometry) Patch 1.2.0.1
 
 ## 目录
 
@@ -499,6 +499,8 @@ ACT 日志格式由以下几部分组成：
 - 使用玩家 ID 代替玩家名，以防玩家与另一名玩家或实体重名，或有插件篡改名称；  
 - 使用 `BNpcId` `BNpcNameId` 代替实体名。  
 
+#### 获取实体数据
+
 除了在日志行内查找外，可以用下述方式主动获取实体数据，如：
 
 - Cactbot/OverlayPlugin
@@ -647,9 +649,7 @@ ACT 日志格式由以下几部分组成：
 
 游戏消息框中出现的所有系统消息均会生成与之对应的网络和 ACT 日志，类型为 `00` = 0x00。  
 
-日志中第一个字段为消息的子类型。由于这类日志的诸多问题（见下文），很少用于触发器，所以目前没有完整的文档记录所有类型的含义。（欢迎提交 PR！）  
-
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -659,7 +659,15 @@ ACT 日志格式：
 [timestamp] ChatLog 00:[code]:[name]:[line]
 ```
 
-#### 示例
+**字段**
+
+- **`code`**  
+  消息的子类型。由于这类日志的诸多问题，很少用于触发器，所以目前没有完整的文档记录所有类型的含义。  
+
+- **`name`**  
+  聊天、台词类消息的说话者名称，其他大多数子类型则为空。
+
+**示例**
 
 ```log
 网络日志示例：
@@ -707,15 +715,13 @@ ACT 日志示例：
 可以在[OverlayPlugin 仓库中提交 issue](https://github.com/OverlayPlugin/OverlayPlugin/issues)，
 以便开发者调查并实际添加。
 
-注：这不包含发言频道。
-
 <a name="line01"></a>
 
 ### 01 行 (0x01)：切换区域
 
 此日志在切换区域时生成。ACT 已开启后启动游戏，或游戏已开启后启动 ACT，也均会生成该日志，所以此日志很适合用于初始化。  
   
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -725,7 +731,16 @@ ACT 日志格式：
 [timestamp] Territory 01:[id]:[name]
 ```
 
-#### 示例
+**字段**
+
+- **`id`**    
+  区域的特征 id，详见[区域信息](../../resources/zone_info.ts)。【链接不对】
+
+- **`name`**  
+  区域的名称，受语言影响。当区域没有用于展示的实际名称时，显示为区域名称的原始文本。  
+
+
+**示例**
 
 ```log
 网络日志示例：
@@ -737,19 +752,13 @@ ACT 日志示例：
 [14:22:04.549] Territory 01:31F:Alphascape (V2.0)
 ```
 
-- `id`  
-  区域的特征 id，详见[区域信息](../../resources/zone_info.ts)。
-
-- `name`
-  区域的名称，受语言影响。当区域没有用于展示的实际名称时，显示为区域名称的原始文本。  
-
 <a name="line02"></a>
 
 ### 02 行 (0x02)：主控玩家
 
 冗余日志，生成于每条[切换区域](#line01)日志后，包含当前玩家的名称和 ID。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -759,7 +768,7 @@ ACT 日志格式：
 [timestamp] ChangePrimaryPlayer 02:[id]:[name]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -777,7 +786,11 @@ ACT 日志示例：
 
 新实体被添加到玩家客户端时，生成此日志。
 
-#### 格式
+玩家与实体的距离缩短、同屏实体数下降导致实体出现时，也会导致实体添加到客户端并生成此日志。  
+注：S 级狩猎怪、优雷卡恶名精英等实体带有一个优先显示的实体标签，使其在地图内任意距离下均可显示，同时生成此日志。
+基于这点，可以写出提示 S 级狩猎的触发器和插件。
+
+**格式**
 
 ```log
 网络日志格式：
@@ -787,7 +800,25 @@ ACT 日志格式：
 [timestamp] AddCombatant 03:[id]:[name]:[job]:[level]:[ownerId]:[worldId]:[world]:[npcNameId]:[npcBaseId]:[currentHp]:[hp]:[currentMp]:[mp]:[?]:[?]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**字段**
+
+- **`job`**  
+  10 进制的职业 ID。
+
+- **`level`**  
+  16 进制的等级，如 `5A` 代表 90 级。
+
+- **`ownerId`**  
+  召唤物主人的 ID，仅对召唤物有效。 
+
+- **`worldId`/`world`**  
+  玩家所属服务器的信息，仅玩家有效。
+
+- **`?`**  
+  已经弃用的技力，为保证日志格式不变而保留相应字段。  
+  后文中所有出现在生命和魔力值之后的两个空白字段均是这个原因，不再赘述。
+
+**示例**
 
 ```log
 网络日志示例：
@@ -807,34 +838,13 @@ ACT 日志示例：
 [21:35:11.402] AddCombatant 03:4000B36a:Catastrophe:00:46:0000:00::5631:6358:57250:57250:0:10000:0:0:0:0:0:-4.792213E-05
 ```
 
-- `job`
-  10 进制的职业 ID。
-
-- `level`
-  16 进制的等级，如 `5A` 代表 90 级。
-
-- `ownerId`
-  召唤物主人的 ID，仅召唤物有效。 
-
-- `worldId`/`world`
-  玩家所属服务器的信息，仅玩家有效。
-
-- `?`
-  已经弃用的技力，为保证日志格式不变而保留相应字段。
-
-玩家与实体的距离缩短、同屏实体数下降导致实体出现时，也会导致实体添加到客户端并生成此日志。  
-注：S 级狩猎怪、优雷卡恶名精英等实体带有一个优先显示的实体标签，使其在地图内任意距离下均可显示，同时生成此日志。
-基于这点，可以写出提示 S 级狩猎的触发器和插件。
-
 <a name="line04"></a>
 
 ### 04 行 (0x04)：移除实体
 
 实体从玩家客户端被移除时，生成此日志。与添加实体类似，实体不仅会在切换地图或死亡时移除，也会在同屏实体过多、距离过远时移除。  
 
-各字段的含义与[添加实体](#line03)完全一致，不再赘述。
-
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -844,7 +854,11 @@ ACT 日志格式：
 [timestamp] RemoveCombatant 04:[id]:[name]:[job]:[level]:[owner]:[?]:[world]:[npcNameId]:[npcBaseId]:[?]:[hp]:[?]:[?]:[?]:[?]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**字段**
+
+各字段的含义与[添加实体](#line03)完全一致，不再赘述。
+
+**示例**
 
 ```log
 网络日志示例：
@@ -864,7 +878,7 @@ ACT 日志示例：
 
 【跨服有效吗？】
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -874,7 +888,7 @@ ACT 日志格式：
 [timestamp] PartyList 0B:[partyCount]:[id0]:[id1]:[id2]:[id3]:[id4]:[id5]:[id6]:[id7]:[id8]:[id9]:[id10]:[id11]:[id12]:[id13]:[id14]:[id15]:[id16]:[id17]:[id18]:[id19]:[id20]:[id21]:[id22]:[id23]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -896,7 +910,7 @@ ACT 日志示例：
 
 【localContentId？】
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -906,7 +920,7 @@ ACT 日志格式：
 [timestamp] PlayerStats 0C:[job]:[strength]:[dexterity]:[vitality]:[intelligence]:[mind]:[piety]:[attackPower]:[directHit]:[criticalHit]:[attackMagicPotency]:[healMagicPotency]:[determination]:[skillSpeed]:[spellSpeed]:[?]:[tenacity]:[localContentId]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -929,7 +943,11 @@ ACT 日志示例：
 当技能咏唱成功时，会相应地生成[单体技能](#line21)或[群体技能](#line22)日志；  
 咏唱失败、被中断时，会会相应地生成[取消咏唱](#line23)日志。
 
-#### 格式
+该日志也通常与一条 `0x00` [游戏日志](#line00)同时产生，如：
+- `00:282B:Shinryu readies Earthen Fury.`
+- `00:302b:The proto-chimera begins casting The Ram's Voice.`
+
+**格式**
 
 ```log
 网络日志格式：
@@ -939,7 +957,14 @@ ACT 日志格式：
 [timestamp] StartsCasting 14:[sourceId]:[source]:[id]:[ability]:[targetId]:[target]:[castTime]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**字段**
+
+此日志行中的 `x` `y` `z` `heading` 均为 ACT 从定期轮询内存时储存的实体数据中读取的。  
+对于很多副本机制，不可见实体在咏唱前一瞬间才被设置到指定位置，或实体在读条开始时正在大幅度移动、转身，这些都会造成这些字段**数据错误**，这经常造成使用 `0x14` 日志行的触发器产生错误结果。  
+所以 OverlayPlugin 额外添加了[网络咏唱](#line263)日志行，包含从网络包中获取的准确坐标和面向信息，与本条日志同时生成。如果你需要咏唱的坐标和方向信息，请使用[网络咏唱](#line263)代替。  
+
+
+**示例**
 
 ```log
 网络日志示例：
@@ -956,14 +981,6 @@ ACT 日志示例：
 [12:48:29.783] StartsCasting 14:40024FD0:The Manipulator:13BE:Judgment Nisi:10FF0001:Tini Poutini:3.20:8.055649:-17.03842:10.58736:-4.792213E-05
 [12:48:36.131] StartsCasting 14:40024FCE:The Manipulator:13D0:Seed Of The Sky:E0000000::2.70:8.055649:-17.03842:10.58736:-4.792213E-05
 ```
-
-该日志通常与一条 `0x00` [游戏日志](#line00)同时产生，如：
-- `00:282B:Shinryu readies Earthen Fury.`
-- `00:302b:The proto-chimera begins casting The Ram's Voice.`
-
-此日志行中的 `x` `y` `z` `heading` 均为 ACT 从定期轮询内存时储存的实体数据中读取的数据。  
-对于很多副本机制，不可见实体在咏唱前一瞬间才被设置到指定位置，或实体在读条开始时正在大幅度移动、转身，这些都会造成这些字段**数据错误**，这经常造成使用 `0x14` 日志行的触发器产生错误结果。  
-所以 OverlayPlugin 额外添加了[网络咏唱](#line263)日志行，包含从网络包中获取的准确坐标和面向信息，与本条日志同时生成。如果你需要咏唱的坐标和方向信息，请使用[网络咏唱](#line263)代替。  
 
 #### 咏唱时间
 
@@ -1000,7 +1017,7 @@ but the `targetIndex` would be 0, 1, and 2 for the three lines respectively.
 Thus, if you want to find all of the 21/22-lines related to a single action usage,
 you would do so by collecting 21/22-lines until you see one for which `targetCount - 1 == targetIndex`.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1010,7 +1027,7 @@ ACT 日志格式：
 [timestamp] ActionEffect 15:[sourceId]:[source]:[id]:[ability]:[targetId]:[target]:[flags]:[damage]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[?]:[targetCurrentHp]:[targetMaxHp]:[targetCurrentMp]:[targetMaxMp]:[?]:[?]:[targetX]:[targetY]:[targetZ]:[targetHeading]:[currentHp]:[maxHp]:[currentMp]:[maxMp]:[?]:[?]:[x]:[y]:[z]:[heading]:[sequence]:[targetIndex]:[targetCount]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1243,7 +1260,7 @@ You can examine these to find damage down and vulnerability percentages.
 
 咏唱因主动取消或移动而中断、或咏唱被打断时生成此日志。 【插言 死亡 esc ？】
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1253,7 +1270,7 @@ ACT 日志格式：
 [timestamp] CancelAction 17:[sourceId]:[source]:[id]:[name]:[reason]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1281,7 +1298,7 @@ ACT 日志示例：
 `effectId` 等字段仅在此情况下有实际值。
 For these, the `damageType` field is a number id that corresponds to the `AttackType` table.【？】
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1291,7 +1308,7 @@ ACT 日志格式：
 [timestamp] DoTHoT 18:[id]:[name]:[which]:[effectId]:[damage]:[currentHp]:[maxHp]:[currentMp]:[maxMp]:[?]:[?]:[x]:[y]:[z]:[heading]:[sourceId]:[source]:[damageType]:[sourceCurrentHp]:[sourceMaxHp]:[sourceCurrentMp]:[sourceMaxMp]:[?]:[?]:[sourceX]:[sourceY]:[sourceZ]:[sourceHeading]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1314,7 +1331,7 @@ Ground effect dots get listed separately.
 此日志生成于实体被打倒时。  【延迟？】
 通常与一条[游戏日志](#line00)同时出现，如 `You defeat the worm's heart.`   
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1324,7 +1341,7 @@ ACT 日志格式：
 [timestamp] Death 19:[targetId]:[target]:[sourceId]:[source]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1346,7 +1363,7 @@ ACT 日志示例：
 
 This message is the "gains effect" message for players and mobs gaining effects whether they are good or bad.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1356,7 +1373,7 @@ ACT 日志格式：
 [timestamp] StatusAdd 1A:[effectId]:[effect]:[duration]:[sourceId]:[source]:[targetId]:[target]:[count]:[targetMaxHp]:[sourceMaxHp]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1414,7 +1431,7 @@ When an actor dies, you will get 30-lines for buffs that were removed by it dyin
 
 ### 27 行 (0x1B)：点名标记
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1424,7 +1441,7 @@ ACT 日志格式：
 [timestamp] TargetIcon 1B:[targetId]:[target]:[?]:[?]:[id]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1540,7 +1557,7 @@ and then removes it later.
   | 0   | `A`  |     | 1   | `B`  |     | 2   | `C`  |     | 3   | `D`  |
   | 4   | `1`  |     | 5   | `2`  |     | 6   | `3`  |     | 7   | `4`  |
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1550,7 +1567,7 @@ ACT 日志格式：
 [timestamp] WaymarkMarker 1C:[operation]:[waymark]:[id]:[name]:[x]:[y]:[z]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1579,7 +1596,7 @@ ACT 日志示例：
   | 4   | 攻击 5 |     | 9   | 禁止 2 |     |     |        |     |     |        |
 
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1589,7 +1606,7 @@ ACT 日志格式：
 [timestamp] SignMarker 1D:[operation]:[waymark]:[id]:[name]:[targetId]:[targetName]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1610,7 +1627,7 @@ ACT 日志示例：
 
 此日志与[添加状态](#line26)相对应，在效果移除时生成。各字段含义详见[添加状态](#line26)。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1620,7 +1637,7 @@ ACT 日志格式：
 [timestamp] StatusRemove 1E:[effectId]:[effect]:[?]:[sourceId]:[source]:[targetId]:[target]:[count]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1642,7 +1659,7 @@ ACT 日志示例：
 切换地图、职业【？】时也【可能？】产生此日志；即使满量谱导致量谱数据溢出而未变化时也会产生此日志。
 该日志仅对自己有效，网络包中不直接包含其他人的量谱数据。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1652,7 +1669,7 @@ ACT 日志格式：
 [timestamp] Gauge 1F:[id]:[data0]:[data1]:[data2]:[data3]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1715,7 +1732,7 @@ DirectorUpdate is a category of ActorControlSelf and is used to control the even
 - barrier up/down
 - fade in/out
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1725,7 +1742,7 @@ ACT 日志格式：
 [timestamp] Director 21:[instance]:[command]:[data0]:[data1]:[data2]:[data3]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1778,7 +1795,7 @@ This can help you know when a mob is targetable, for example.
 
 The `toggle` value is either `00` (hide nameplate) or `01` (show nameplate).
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1788,7 +1805,7 @@ ACT 日志格式：
 [timestamp] NameToggle 22:[id]:[name]:[targetId]:[targetName]:[toggle]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1810,7 +1827,7 @@ This does not appear to be used for player to player skill tethers like dragonsi
 
 The `id` parameter is an id into the [Channeling table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/Channeling.csv).
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1820,7 +1837,7 @@ ACT 日志格式：
 [timestamp] Tether 23:[sourceId]:[source]:[targetId]:[target]:[?]:[?]:[id]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1868,7 +1885,7 @@ but other actions taken can cause extra increments to happen independent of the 
 Each limit break bar is `0x2710` (10,000 decimal) units.
 Thus, the maximum possible recorded value would be `0x7530`.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1878,7 +1895,7 @@ ACT 日志格式：
 [timestamp] LimitBreak 24:[valueHex]:[bars]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1913,7 +1930,7 @@ at the moment the action is "locked in".
 > It would help though if I did, but ACT doesn't do multi-line parsing very easily,
 > so I would need to do a lot of work-arounds."
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1923,7 +1940,7 @@ ACT 日志格式：
 [timestamp] EffectResult 25:[id]:[name]:[sequenceId]:[currentHp]:[maxHp]:[currentMp]:[maxMp]:[currentShield]:[?]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -1983,7 +2000,7 @@ For non-fairy allies, it is generated alongside [NetworkBuff](#line26),
 [NetworkBuffRemove](#line30),
 and [NetworkActionSync](#line37).
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -1993,7 +2010,7 @@ ACT 日志格式：
 [timestamp] StatusList 26:[targetId]:[target]:[jobLevelData]:[hp]:[maxHp]:[mp]:[maxMp]:[currentShield]:[?]:[x]:[y]:[z]:[heading]:[data0]:[data1]:[data2]:[data3]:[data4]:[data5]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2063,7 +2080,7 @@ the HP value is an update, rather than a value in memory.
 NPCs (other than player pets) generally do not receive these packets,
 as they do not have passive HP regen.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2073,7 +2090,7 @@ ACT 日志格式：
 [timestamp] UpdateHp 27:[id]:[name]:[currentHp]:[maxHp]:[currentMp]:[maxMp]:[?]:[?]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2099,7 +2116,7 @@ but is also sent when changing subzones where the map changes
 `regionName` and `placeName` are always present,
 but `placeNameSub` is optional.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2109,7 +2126,7 @@ ACT 日志格式：
 [timestamp] ChangeMap 28:[id]:[regionName]:[placeName]:[placeNameSub]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2142,7 +2159,7 @@ ACT 日志示例：
 [10:55:06.707] SystemLogMessage 29:8004001E:B3A:00:00:E0000000
 ```
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2152,7 +2169,7 @@ ACT 日志格式：
 [timestamp] SystemLogMessage 29:[instance]:[id]:[param0]:[param1]:[param2]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2228,7 +2245,7 @@ Future work:
 
 此日志似乎只对当前玩家有效，会列出某些状态。需要深入研究。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2238,7 +2255,7 @@ ACT 日志格式：
 [timestamp] StatusList3 2A:[id]:[name]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2281,15 +2298,15 @@ Parsed log lines are blank for this type.+
 As network log lines, they usually look like this:
 `253|2019-05-21T19:11:02.0268703-07:00|FFXIV PLUGIN VERSION: 1.7.2.12, CLIENT MODE: FFXIV_64|845e2929259656c833460402c9263d5c`
 
-Parsed log lines are blank for this type.
+Parsed log lines are blank for this type.【？】
 
 <a name="line254"></a>
 
 ### 254 行 (0xFE)：错误日志
 
-These are lines emitted directly by the ffxiv plugin when something goes wrong.
+解析插件解析到错误数据时会生成此日志行。
 
-## OverlayPlugin Log Lines
+## OverlayPlugin 解析日志行
 
 如果你在 ACT 中使用 OverlayPlugin（注：这是国服整合版内置的必备插件），则会额外解析其他的日志类型。
 目前，`0x100` = 256 以后的日志类型由 OverlayPlugin 生成，而 `0x00-0xFF` = 0-255 的日志类型预留给 FF14 解析插件。 
@@ -2301,7 +2318,7 @@ These are lines emitted directly by the ffxiv plugin when something goes wrong.
 当使用 OverlayPlugin 注册任何自定义日志类型时，生成该日志。
 这样可以清楚地看出当前日志文件包含了什么版本的哪些额外日志行。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2311,7 +2328,7 @@ ACT 日志格式：
 [timestamp] 256 100:[id]:[source]:[version]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2338,7 +2355,7 @@ ACT 日志示例：
 特效的具体效果可能仅是视觉上的，如：  
 - 绝龙诗和绝欧米茄的眼睛；   
 - 六根山的水、火线；  
-- P8s 本体运动会、六根山老二、阿罗阿罗岛老一的塔；  
+- P8s 本体运动会、六根山、阿罗阿罗岛的塔；  
 - P9 地裂的地板线条；    
 
 也可能包含物理模型的实际变化，如：   
@@ -2349,7 +2366,7 @@ ACT 日志示例：
 
 需要注意，一些机制可能看起来与上面的例子类似，但是实际上使用的是不可选中的实体。  
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2359,7 +2376,28 @@ ACT 日志格式：
 [timestamp] 257 101:[instance]:[flags]:[location]:[data0]:[data1]
 ```
 
-#### 示例
+**字段**
+
+- **`instance`**   
+  见[副本实例](#副本实例)。  
+
+- **`flags`**  
+  表明产生的是何种效果，与各个副本实例有关。如：  
+  - P6s：  
+    `00020001` 代表 `+` 形格子出现，`00400020` 代表 `×` 形格子出现。  
+    `00080004` 代表 【？】 消失。  
+    
+- **`location`**  
+  表明效果产生的具体位置，与各个副本实例有关。  
+  即便是极其相似的机制，其 `location` 对应的位置可能也并不相同，全凭开发者想法而定。如：  
+  - 绝龙诗的龙眼：
+  - 绝欧米茄的眼睛：  
+  【？】
+
+由于以上原因，撰写触发器时请务必限制日志的 `instance` 字段，或者限制触发器的区域 ID，否则会在其他副本中意想不到地触发。  
+
+
+**示例**
 
 ```log
 网络日志示例：
@@ -2373,27 +2411,13 @@ ACT 日志示例：
 [20:07:48.733] 257 101:800375A5:00020001:05:00:0000
 ```
 
-- `instance`   
-  见[副本实例](#副本实例)。  
-
-- `flags`  
-  表明产生的是何种效果，与各个副本实例有关。如：  
-  - P6s：  
-    `00020001` 代表 `+` 形格子出现，`00400020` 代表 `×` 形格子出现。  
-    `00080004` 代表 消失。  
-- `location`  
-  表明效果产生的具体位置，与各个副本实例有关。  
-  即便相同类型的效果，其 `location` 可能也并不相同，如龙眼和欧米茄的眼睛。  【？】
-
-由于以上原因，撰写触发器时请务必限制日志的 `instance` 字段，或者限制触发器的区域 ID，否则会在其他副本中意想不到地触发。  
-
 <a name="line258"></a>
 
 ### 258 行 (0x102)：危命任务
 
 此日志行在危命任务生成、移除、进度变化时生成。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2403,7 +2427,7 @@ ACT 日志格式：
 [timestamp] 258 102:[category]:[?]:[fateId]:[progress]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2423,7 +2447,7 @@ ACT 日志示例：
 
 此日志行与[危命任务](#line257)类似，在博兹雅遭遇战生成、移除、进度变化时生成。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2433,7 +2457,7 @@ ACT 日志格式：
 [timestamp] 259 103:[popTime]:[timeRemaining]:[?]:[ceKey]:[numPlayers]:[status]:[?]:[progress]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2451,15 +2475,28 @@ ACT 日志示例：
 
 ### 260 行 (0x104)：进战状态
 
-该日志行记录 ACT 和游戏客户端内的战斗状态。
+该日志行记录 ACT 和游戏客户端内的战斗状态。  
+注意此日志行的内容甚至产生与否和个人 ACT 设置有关，使用 Triggernometry 开始或结束战斗也会生成此日志。关于如何合理利用此日志的方式详见下文。
 
-- `inGameCombat`
+**格式**
+
+```log
+网络日志格式：
+260|[timestamp]|[inACTCombat]|[inGameCombat]|[isACTChanged]|[isGameChanged]
+
+ACT 日志格式：
+[timestamp] 260 104:[inACTCombat]:[inGameCombat]:[isACTChanged]:[isGameChanged]
+```
+
+**字段**
+
+- `inGameCombat`  
   游戏客户端内是否处于战斗状态。
 
-- `inACTCombat`
+- `inACTCombat`  
   ACT 是否认为当前处于战斗状态。这可能受到周围其他队友战斗状态的影响。
 
-- `isACTChanged` `isGameChanged`
+- `isACTChanged` `isGameChanged`  
   `inACTCombat` 字段与 ACT 中脱战多久结束战斗的设置有关，
   若该项设置时间短于副本上天，会使 `inACTCombat` 从 `1` 变为 `0`，落地后再变为 `1`。
   所以只用前两个字段写触发器会导致在不同客户端上运行结果可能不一致。
@@ -2472,17 +2509,8 @@ ACT 日志示例：
 
 导入日志时，OverlayPlugin 会用 `inACTCombat` 字段重新分割战斗，从而保证分割方式与原本记录时一致。
 
-#### 格式
 
-```log
-网络日志格式：
-260|[timestamp]|[inACTCombat]|[inGameCombat]|[isACTChanged]|[isGameChanged]
-
-ACT 日志格式：
-[timestamp] 260 104:[inACTCombat]:[inGameCombat]:[isACTChanged]:[isGameChanged]
-```
-
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2502,26 +2530,15 @@ ACT 日志示例：
 
 OverlayPlugin 通过轮询内存中的实体属性，在检测到属性变化时生成此日志行。
 
-注意轮询内存并非由任何修改实体属性的网络包触发，可能造成时间上的不稳定和延后。
-出于同样的原因，此日志行所含数据并不稳定，甚至可能同一个实体连续出现两次。
-此外，此日志行包含大量字段，匹配时的性能负担更重。
-如果有其他选择，请尽量避免在触发器中使用此日志。  
+注意轮询内存并非由任何修改实体属性的网络包触发，可能造成内容的不稳定，以及时间上的延后，甚至可能同一个实体连续出现两次。  
+此外，此日志行包含大量字段，匹配时的性能负担更重。  
+如果有其他选择，请尽量仅将此日志作为撰写触发器的参考，避免在触发器中使用此日志。  
 
 对于当前版本而言，此日志行中的重要数据包括：`BNpcNameID`、`TransformationId`、`WeaponId`、`TargetID`、`ModelStatus`，
-这些属性的变化目前并不反映于任何其它日志行。未来可能引入针对这些属性的[实体控制]【？】日志子类型，从而准确获取这些属性的变化。  
+这些属性的变化目前并不反映于任何其它日志行。未来可能引入针对这些属性的[实体控制](#line273)日志子类型，从而准确获取这些属性的变化。  
 更多信息：参考 [LineCombatant](https://github.com/OverlayPlugin/OverlayPlugin/blob/main/OverlayPlugin.Core/MemoryProcessors/Combatant/LineCombatant.cs#L27)。
 
-此日志行有三个类型：
-
-- Add: 包含新生成的实体所有与默认值不同的属性
-- Change: 包含已有实体所有变化的属性
-- Remove: 实体被移除，不包含任何属性
-
-每行可以包含任意对属性与值。
-
-注意：国服 CafeACT 整合中修改了 OverlayPlugin 中此日志行的逻辑，各个字段默认顺序与原版不同。如果你的触发器使用了此日志行中的字段值，请勿在未测试的情况下假定字段的先后顺序。
-
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2531,7 +2548,19 @@ ACT 日志格式：
 [timestamp] 261 105:[change]:[id]
 ```
 
-#### 示例
+**字段**
+
+此日志行有三个类型：
+
+- `Add`: 包含新生成的实体所有与默认值不同的属性
+- `Change`: 包含已有实体所有变化的属性
+- `Remove`: 实体被移除，不包含任何属性
+
+每个日志行可以包含任意对属性与值。
+
+注意：国服 CafeACT 整合中魔改了 OverlayPlugin 中此日志行的逻辑，各个字段默认顺序与原版不同。如果你的触发器使用了此日志行中的字段值，请勿在未测试的情况下假定字段的先后顺序。
+
+**示例**
 
 ```log
 网络日志示例：
@@ -2564,7 +2593,7 @@ CR `\r` 和 LF `\n` 换行符也会被转义，并且需要取消转义。
 
 详见日志示例。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2574,7 +2603,7 @@ ACT 日志格式：
 [timestamp] 262 106:[locale]:[?]:[key]:[value]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2592,26 +2621,35 @@ ACT 日志示例：
 
 ### 263 行 (0x107)：网络咏唱
 
-此日志与[技能咏唱](#line20)同时生成，包含网络包中的准确位置和面向信息。
+此日志与[技能咏唱](#line20)同时生成，包含网络包中的准确位置和面向信息，
+这些信息可以看做 “服务器认定的位置和面向”。  
 
-- `x`/`y`/`z`/`heading`  
+如果你仅关注某咏唱的坐标和方向信息，且实体在咏唱时才刚刚出现（或从未出现过可见实体），
+很可能实体是咏唱时刚刚放置的，详见[技能咏唱](#line20)。
+此时请务必使用此日志行的数据代替[技能咏唱](#line20)中轮询内存得到的数据。
+
+- **`x`/`y`/`z`/`heading`**  
   坐标和面向与咏唱技能的目标类型有关。  
-  - 技能无目标（即目标不是咏唱者本身或“环境”）：
+  - 技能无目标（即目标不是咏唱者本身或“环境”）：  
     坐标和面向采用咏唱者的数据。
-  - 技能目标为某个实体：
+
+  - 技能目标为某个实体：   
     坐标采用目标的数据，而面向为咏唱者到目标的方向。
-    注意如果实际施放的方向可能并不是
-  - 技能为对地面施放，与实体无关：
-    坐标和面向采用目标位置的数据。【面向？】
-    如：青魔法师投弹
-  - 技能为对某个方向施放，与实体无关：
+    注意如果目标会移动，实际施放的方向也会跟随目标移动，
+    最终并不会按此日志中的方向施放。
+
+  - 技能为对地面施放，与实体无关：  
+    坐标和面向采用目标位置的数据。【面向？】  
+    如：青魔法师投弹  
+
+  - 技能为对某个方向施放，与实体无关：  
     坐标采用咏唱者的数据，面向为技能的施放方向。
 
 注意判断依据是技能的目标，而不是技能的实际效果。
 比如对目标施放的直线 AoE（如点名直线分摊）属于第二类，
 而引导面向的技能（如绝龙诗 P3）属于第四类。
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2621,7 +2659,7 @@ ACT 日志格式：
 [timestamp] 263 107:[sourceId]:[id]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2666,7 +2704,7 @@ Note that unlike [StartsUsingExtra](#line-263-0x107-startsusingextra), you do no
 to worry about whether or not there is an actor target, as this represents the final
 snapshotted location of the Ability.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2676,7 +2714,7 @@ ACT 日志格式：
 [timestamp] 264 108:[sourceId]:[id]:[globalEffectCounter]:[dataFlag]:[x]:[y]:[z]:[heading]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2702,7 +2740,7 @@ Values for `unrestrictedParty`, `minimalItemLevel`, `silenceEcho`,
 As of FFXIV patch 6.5.1, a value of `0` indicates that the setting is disabled,
 and a value of `1` indicates that it is enabled.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2712,7 +2750,7 @@ ACT 日志格式：
 [timestamp] 265 109:[zoneId]:[zoneName]:[inContentFinderContent]:[unrestrictedParty]:[minimalItemLevel]:[silenceEcho]:[explorerMode]:[levelSync]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2737,7 +2775,7 @@ indicating that an NPC has yelled something (e.g. UCOB Nael quotes).
 in the [BNpcName](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcName.csv)
 and [NpcYell](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/NpcYell.csv) tables, respectively.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2747,7 +2785,7 @@ ACT 日志格式：
 [timestamp] 266 10A:[npcId]:[npcNameId]:[npcYellId]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2773,7 +2811,7 @@ in the [BNpcName](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNp
 and [InstanceContentTextData](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/InstanceContentTextData.csv)
 tables, respectively.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2783,7 +2821,7 @@ ACT 日志格式：
 [timestamp] 267 10B:[npcId]:[instance]:[npcNameId]:[instanceContentTextId]:[displayMs]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2809,7 +2847,7 @@ This log line is emitted whenever a countdown is started.
 Note: Because there is no network packet sent when a countdown completes successfully,
 no log line is (or reasonably can be) emitted for the 'Engage!' message.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2819,7 +2857,7 @@ ACT 日志格式：
 [timestamp] 268 10C:[id]:[worldId]:[countdownTime]:[result]:[name]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2837,7 +2875,7 @@ ACT 日志示例：
 
 This log line is emitted whenever a currently-running countdown is cancelled.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2847,7 +2885,7 @@ ACT 日志格式：
 [timestamp] 269 10D:[id]:[worldId]:[name]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2871,7 +2909,7 @@ The FFXIV client interpolates the actor's movement between the current position 
 
 Currently, these log lines are emitted only for non-player actors (id >= 0x40000000).
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2881,7 +2919,7 @@ ACT 日志格式：
 [timestamp] 270 10E:[id]:[heading]:[?]:[?]:[x]:[y]:[z]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2913,7 +2951,7 @@ in sequence to have an enemy appear to jump to a new location:
 3. Another `NetworkAbility` line (or other packet) with an associated animation to make it
    appear as though the actor has landed.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2923,7 +2961,7 @@ ACT 日志格式：
 [timestamp] 271 10F:[id]:[heading]:[?]:[?]:[x]:[y]:[z]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2956,7 +2994,7 @@ Note: If the actor spawns with a `tetherId` or `animationState` value, there wil
 a corresponding [NetworkTether](#line-35-0x23-networktether)
 or [ActorControlExtra](#line-273-0x111-actorcontrolextra) line to indidicate this information.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -2966,7 +3004,7 @@ ACT 日志格式：
 [timestamp] 272 110:[id]:[parentId]:[tetherId]:[animationState]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -2982,7 +3020,7 @@ ACT 日志示例：
 
 <a name="line273"></a>
 
-### 273 行 (0x111)：ActorControl+
+### 273 行 (0x111)：实体控制 (ActorControl)
 
 This line contains certain data from `ActorControl` packets not otherwise made available
 through other log lines.
@@ -3013,7 +3051,7 @@ given the volume of data, although more may be added in the future:
     [PublicContentTextData table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/PublicContentTextData.csv)
   - `param3` and `param4` are optional fields referenced in some messages
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -3023,7 +3061,7 @@ ACT 日志格式：
 [timestamp] 273 111:[id]:[category]:[param1]:[param2]:[param3]:[param4]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
@@ -3039,7 +3077,7 @@ ACT 日志示例：
 
 <a name="line274"></a>
 
-### 274 行 (0x112)：ActorControlSelf+
+### 274 行 (0x112)：实体控制-自身 (ActorControlSelf)
 
 This line contains certain data from `ActorControlSelf` packets not otherwise made available
 through other log lines.
@@ -3066,7 +3104,7 @@ given the volume of data, although more may be added in the future:
 - `DisplayLogMessageParams` - used to display a log message in the chat window.
   - Very similar to `DisplayLogMessage`, except that `param2` appears to always be an actor ID.
 
-#### 格式
+**格式**
 
 ```log
 网络日志格式：
@@ -3076,7 +3114,7 @@ ACT 日志格式：
 [timestamp] 274 112:[id]:[category]:[param1]:[param2]:[param3]:[param4]:[param5]:[param6]
 ```
 
-#### 示例
+**示例**
 
 ```log
 网络日志示例：
