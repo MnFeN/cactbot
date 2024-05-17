@@ -75,7 +75,7 @@
     - [31 行 (0x1F)：量谱更新](#31-行-0x1f量谱更新)
     - [33 行 (0x21)：副本演出](#33-行-0x21副本演出)
     - [34 行 (0x22)：切换可选](#34-行-0x22切换可选)
-    - [35 行 (0x23)：连线](#35-行-0x23连线)
+    - [35 行 (0x23)：实体连线](#35-行-0x23实体连线)
     - [36 行 (0x24)：极限技](#36-行-0x24极限技)
     - [37 行 (0x25)：技能生效](#37-行-0x25技能生效)
       - [Tracking Ability Resolution](#tracking-ability-resolution)
@@ -104,7 +104,7 @@
     - [264 行 (0x108)：网络技能](#264-行-0x108网络技能)
     - [265 行 (0x109)：任务搜索器](#265-行-0x109任务搜索器)
     - [266 行 (0x10A)：实体喊话](#266-行-0x10a实体喊话)
-    - [267 行 (0x10B)：弹出气泡](#267-行-0x10b弹出气泡)
+    - [267 行 (0x10B)：横幅气泡](#267-行-0x10b横幅气泡)
     - [268 行 (0x10C)：倒计时](#268-行-0x10c倒计时)
     - [269 行 (0x10D)：倒计时取消](#269-行-0x10d倒计时取消)
     - [270 行 (0x10E)：实体移动](#270-行-0x10e实体移动)
@@ -1723,7 +1723,7 @@ ACT 日志示例：
 
 <a name="line35"></a>
 
-### 35 行 (0x23)：连线
+### 35 行 (0x23)：实体连线
 
 This log line is for tethers between enemies or enemies and players.
 This does not appear to be used for player to player skill tethers like dragonsight or cover.
@@ -2190,13 +2190,10 @@ Parsed log lines are blank for this type.
 ### 252 行 (0xFC): 网络数据
 
 如果 ACT 解析插件中“输出网络数据”的选项已开启，则会在每个网络包接收时相应生成此日志，详见[浏览网络数据](#浏览网络数据)。
-If the setting to dump all network data to logfiles is turned on,
-then ACT will emit all network data into the network log itself.
-This can be used to import a network log file into ffxivmon and inspect packet data.
 
-Parsed log lines are blank for this type.+
+此日志不会生成对应的 ACT 解析日志。
 
-![dump network data screenshot](images/logguide_dumpnetworkdata.png)
+【补充内容】
 
 <a name="line253"></a>
 
@@ -2216,7 +2213,7 @@ Parsed log lines are blank for this type.【？】
 ## OverlayPlugin 解析日志行
 
 如果你在 ACT 中使用 OverlayPlugin（注：这是国服整合版内置的必备插件），则会额外解析其他的日志类型。
-目前，`0x100` = 256 以后的日志类型由 OverlayPlugin 生成，而 `0x00-0xFF` = 0-255 的日志类型预留给 FF14 解析插件。 
+目前，`0x100` (256) 以后的日志类型由 OverlayPlugin 生成，而 `0xFF` (255) 以前的日志类型预留给 FF14 解析插件。 
 
 <a name="line256"></a>
 
@@ -2535,8 +2532,21 @@ ACT 日志示例：
 很可能实体是咏唱时刚刚放置的，详见[技能咏唱](#line20)。
 此时请务必使用此日志行的数据代替[技能咏唱](#line20)中轮询内存得到的数据。
 
-- **`x`/`y`/`z`/`heading`**  
+**格式**
+
+```log
+网络日志格式：
+263|[timestamp]|[sourceId]|[id]|[x]|[y]|[z]|[heading]
+
+ACT 日志格式：
+[timestamp] 263 107:[sourceId]:[id]:[x]:[y]:[z]:[heading]
+```
+
+**字段**
+
+- **`x`/`y`/`z`/`heading`**   
   坐标和面向与咏唱技能的目标类型有关。  
+
   - 技能无目标（即目标不是咏唱者本身或“环境”）：  
     坐标和面向采用咏唱者的数据。
 
@@ -2556,16 +2566,6 @@ ACT 日志示例：
 比如对目标施放的直线 AoE（如点名直线分摊）属于第二类，
 而引导面向的技能（如绝龙诗 P3）属于第四类。
 
-**格式**
-
-```log
-网络日志格式：
-263|[timestamp]|[sourceId]|[id]|[x]|[y]|[z]|[heading]
-
-ACT 日志格式：
-[timestamp] 263 107:[sourceId]:[id]:[x]:[y]:[z]:[heading]
-```
-
 **示例**
 
 ```log
@@ -2584,32 +2584,9 @@ ACT 日志示例：
 
 ### 264 行 (0x108)：网络技能
 
-This line contains extra data for Ability/NetworkAOEAbility network data.
+此日志行与[单体技能](#line21)或[群体技能](#line22)同时生成，包含了这两种日志中未涵盖的网络包数据。  
 
-This line is always output for a given Ability hit, regardless of if that Ability hit had
-a corresponding StartsUsing line.
-
-If the ability has no target, or is single-target, the `dataFlag` value will be `0`,
-and the `x`/`y`/`z`/`heading` fields will be blank.
-
-If the ability targets the ground, for example `Asylum`/`Sacred Soil`/caster LB3, the
-`dataFlag` value will be `1` and the `x`/`y`/`z`/`heading` fields will correspond to the
-ground target location and heading of the ability target.
-
-If the ability targets a direction (such as line/cone AoEs), then the `x/y/z` will be the
-source actor's position, while `heading` is the direction that the ability is casting
-towards.
-
-If there is some sort of error related to parsing this data from the network packet,
-`dataFlag` will be `256`, and the `x`/`y`/`z`/`heading` fields will be blank.
-
-`globalEffectCounter` is equivalent to `sequence` field in
-[NetworkAbility](#line-21-0x15-networkability) and
-[NetworkAOEAbility](#line-22-0x16-networkaoeability).
-
-Note that unlike [StartsUsingExtra](#line-263-0x107-startsusingextra), you do not need
-to worry about whether or not there is an actor target, as this represents the final
-snapshotted location of the Ability.
+与[网络咏唱](#line263)类似，此日志行中的位置和方向数据代表服务器判定的准确值。
 
 **格式**
 
@@ -2620,6 +2597,26 @@ snapshotted location of the Ability.
 ACT 日志格式：
 [timestamp] 264 108:[sourceId]:[id]:[globalEffectCounter]:[dataFlag]:[x]:[y]:[z]:[heading]
 ```
+
+**字段**
+
+- **`globalEffectCounter`**  
+  即为[单体技能](#line21)或[群体技能](#line22)中的 `sequence` 字段。  
+
+- **`dataFlag`/`x`/`y`/`z`/`heading`**  
+  坐标和面向与咏唱技能的目标类型有关。  
+
+  - 技能无目标，或对单体施放：   
+    `dataFlag` 为 0，其他字段为空。
+
+  - 技能对地面施放：  
+    `dataFlag` 为 1，坐标和面向采用目标位置的数据。
+
+  - 技能对某个方向施放：  
+    `dataFlag` 为【？】，坐标采用施放者的数据，方向采用技能施放的方向。
+  
+  - 解析错误：
+    `dataFlag` 为 255，其他字段为空。
 
 **示例**
 
@@ -2639,13 +2636,7 @@ ACT 日志示例：
 
 ### 265 行 (0x109)：任务搜索器
 
-This log line tracks the current Content Finder settings.
-`inContentFinderContent` is whether the current zone supports Content Finder settings.
-
-Values for `unrestrictedParty`, `minimalItemLevel`, `silenceEcho`,
-`explorerMode`, and `levelSync` are pulled directly from the game.
-As of FFXIV patch 6.5.1, a value of `0` indicates that the setting is disabled,
-and a value of `1` indicates that it is enabled.
+此日志行追踪任务搜索器的当前设置.【？】
 
 **格式**
 
@@ -2656,6 +2647,19 @@ and a value of `1` indicates that it is enabled.
 ACT 日志格式：
 [timestamp] 265 109:[zoneId]:[zoneName]:[inContentFinderContent]:[unrestrictedParty]:[minimalItemLevel]:[silenceEcho]:[explorerMode]:[levelSync]
 ```
+
+**字段**  
+
+- **`inContentFinderContent`**
+  当前区域是否支持 Content Finder settings.
+
+以下五个字段从游戏直接读取得到，当前版本 (6.51) 中 `0` 代表该选项被禁用，`1` 代表启用。【？】
+- **`unrestrictedParty`**：解除限制  
+- **`minimalItemLevel`**：最低装等  
+- **`silenceEcho`**：超越之力无效化   
+- **`explorerMode`**：探索模式   
+- **`levelSync`**：等级同步   
+
 
 **示例**
 
@@ -2675,12 +2679,7 @@ ACT 日志示例：
 
 ### 266 行 (0x10A)：实体喊话
 
-This log line is emitted whenever a NpcYell packet is received from the server,
-indicating that an NPC has yelled something (e.g. UCOB Nael quotes).
-
-`npcNameId` and `npcYellId` (both hex values) correspond to IDs
-in the [BNpcName](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcName.csv)
-and [NpcYell](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/NpcYell.csv) tables, respectively.
+此日志行对应 `NpcYell` 网络包，代表以头顶气泡形式展示的 NPC 台词，如奈尔台词。【验证*2】
 
 **格式**
 
@@ -2691,6 +2690,15 @@ and [NpcYell](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/NpcYell
 ACT 日志格式：
 [timestamp] 266 10A:[npcId]:[npcNameId]:[npcYellId]
 ```
+
+**字段**
+
+- **`npcNameId`**  
+  16 进制，见 [BNpcName 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcName.csv)。
+
+- **`npcYellId`**  
+  16 进制，见 [NpcYell 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/NpcYell.csv)。
+
 
 **示例**
 
@@ -2708,15 +2716,9 @@ ACT 日志示例：
 
 <a name="line267"></a>
 
-### 267 行 (0x10B)：弹出气泡
+### 267 行 (0x10B)：横幅气泡 (BattleTalk2)
 
-This log line is emitted whenever a BattleTalk2 packet is received from the server,
-resulting in popup dialog being displayed during instanced content.
-
-`npcNameId` and `instanceContentTextId` (both hex values) correspond to IDs
-in the [BNpcName](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcName.csv)
-and [InstanceContentTextData](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/InstanceContentTextData.csv)
-tables, respectively.
+此日志行对应 `BattleTalk2` 网络包，代表副本中以上方横幅气泡文本框形式展示台词等文本。
 
 **格式**
 
@@ -2727,6 +2729,14 @@ tables, respectively.
 ACT 日志格式：
 [timestamp] 267 10B:[npcId]:[instance]:[npcNameId]:[instanceContentTextId]:[displayMs]
 ```
+
+**字段**
+
+- **`npcNameId`**  
+  16 进制，见 [BNpcName 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcName.csv)。
+
+- **`instanceContentTextId`**  
+  16 进制，见 [InstanceContentTextData 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/InstanceContentTextData.csv)。
 
 **示例**
 
@@ -2746,13 +2756,9 @@ ACT 日志示例：
 
 ### 268 行 (0x10C)：倒计时
 
-This log line is emitted whenever a countdown is started.
+尝试开始倒计时时生成此日志行。
 
-`result` is `00` if successful, and non-zero if the attempt to start a countdown failed
-(e.g., if a countdown is already in progress, or if combat has started).
-
-Note: Because there is no network packet sent when a countdown completes successfully,
-no log line is (or reasonably can be) emitted for the 'Engage!' message.
+注意：“战斗开始” 是客户端根据倒计时生成的提示，不对应于任何日志行。如果你需要检测战斗开始，参考[进战状态](#line260)。
 
 **格式**
 
@@ -2763,6 +2769,11 @@ no log line is (or reasonably can be) emitted for the 'Engage!' message.
 ACT 日志格式：
 [timestamp] 268 10C:[id]:[worldId]:[countdownTime]:[result]:[name]
 ```
+
+**字段**
+- **`result`**
+  成功时为 `00`，失败时为非零值（如战斗已开始，或已经开始了其它倒计时）。
+  【发起者是否是自身？】【具体值？】
 
 **示例**
 
@@ -2780,7 +2791,7 @@ ACT 日志示例：
 
 ### 269 行 (0x10D)：倒计时取消
 
-This log line is emitted whenever a currently-running countdown is cancelled.
+倒计时被取消时生成此日志行。
 
 **格式**
 
@@ -2808,13 +2819,14 @@ ACT 日志示例：
 
 ### 270 行 (0x10E)：实体移动
 
-An `ActorMove` packet is sent to instruct the game client to move an actor to a new position
-whenever they have been moved.
-This can be used, for example, to detect rapid movement which would otherwise be lost
-(e.g., in UWU, when Titan turns prior to jumping to indicate the direction of his jump).
-The FFXIV client interpolates the actor's movement between the current position and the new position.
+此日志对应 `ActorMove` 网络包。
 
-Currently, these log lines are emitted only for non-player actors (id >= 0x40000000).
+服务器会定期向客户端发送包含实体位置的 `ActorMove` 网络包以指示实体的当前位置和面向。此外，在一些机制（如绝神兵泰坦上天前的转向）时也会固定发送此网络包。
+
+客户端收到数据后，会根据当前位置和新的位置插值生成移动和转向的动画。
+这就是为什么有时 Boss 已经开始读条但是还在移动或转向，造成即便从内存中实时读取实体位置也不准确，详见[网络咏唱](#line263)。
+
+此日志行会忽略玩家的移动。
 
 **格式**
 
@@ -2842,21 +2854,20 @@ ACT 日志示例：
 
 <a name="line271"></a>
 
-### 271 行 (0x10F)：实体放置
+### 271 行 (0x10F)：实体放置 (ActorSetPos)
 
-An `ActorSetPos` packet is sent to instruct the game client to set the position of an actor
-with no interpolated movement (for example, in UWU, to set the location of the Ifrit clones).
+此日志对应 `ActorSetPos` 网络包，代表直接将实体设置到某个指定位置，无需相关的[实体移动](#line270)。
+如绝神兵、绝龙诗、绝欧中，运动会阶段大量不可选中的分身实体均由这种方式设置位置。
 
-These log lines are sometimes accompanied by other data (other log lines or network packets)
-indicating that an animation should be played if the actor is visible.
-For example, the following log lines (or network packets) might be sent
-in sequence to have an enemy appear to jump to a new location:
+使用此日志时通常需要额外检查实体的 `BNpcId`。
+（或者你也可以转发日志并添加 `BNpcId` 字段，以便统一浏览并更方便地筛选匹配。）
 
-1. A [NetworkAbility](#line-21-0x15-networkability) line with an associated animation
-   to make it appear as though the actor is jumping.
-2. An `ActorSetPos` line to change the actor's location.
-3. Another `NetworkAbility` line (or other packet) with an associated animation to make it
-   appear as though the actor has landed.
+此日志很可能与其他日志一起出现，比如在设置位置之后（立刻或若干秒后）使实体可见、播放落地或跳跃动画等。
+比如，下面是一个实体出现并跳到某个位置的可能日志：
+
+1. [单体技能](#line21)日志行和与之相关的动画，使实体做出起跳动作；
+2. 此日志行，设置实体位置；
+3. 另一个[单体技能](#line21)日志行（或其他网络包）和与之相关的动画，使实体看起来着陆。
 
 **格式**
 
@@ -2884,22 +2895,9 @@ ACT 日志示例：
 
 <a name="line272"></a>
 
-### 272 行 (0x110)：添加实体+
+### 272 行 (0x110)：添加实体+ (SpawnNpcExtra)
 
-This line contains certain data from `NpcSpawn` packets not otherwise made available
-through other log lines.
-
-The `tetherId` field is the same as the `id` field used in
-[NetworkTether](#line-35-0x23-networktether) lines and corresponds to an id in the
-[Channeling table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/Channeling.csv).
-
-The `animationState` field reflects the initial animation state of the actor
-at the time it is spawned, and corresponds to the
-[BNpcState table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcState.csv).
-
-Note: If the actor spawns with a `tetherId` or `animationState` value, there will not be
-a corresponding [NetworkTether](#line-35-0x23-networktether)
-or [ActorControlExtra](#line-273-0x111-actorcontrolextra) line to indidicate this information.
+此日志行包含 `NpcSpawn` 网络包中未包含于[添加实体](#line03)日志行中的额外信息。
 
 **格式**
 
@@ -2910,6 +2908,24 @@ or [ActorControlExtra](#line-273-0x111-actorcontrolextra) line to indidicate thi
 ACT 日志格式：
 [timestamp] 272 110:[id]:[parentId]:[tetherId]:[animationState]
 ```
+
+**字段**
+
+- **`tetherId`**
+  代表实体生成时的带有的连线，与[实体连线](#line35)连线中的 id 字段相同，对应 [Channeling 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/Channeling.csv)中的数据。
+
+- **`parentId`**
+  一个与此实体有关的实体的 ID，如带有连线时通常为与之连线的实体的 ID。不存在 parent 时此字段值为空实体 `E0000000`。
+
+- **`animationState`**
+  代表实体生成时带有的动画效果，对应 [BNpcState 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcState.csv)中的内容。
+
+注意：此日志对应的是实体生成时就已经具有的属性。
+
+若实体从生成开始就一直具有某种连线或动画效果，那么它的连线或动画效果就从未改变，
+不会有相应的[实体连线](#line35)和[实体控制](#line273)日志行。
+
+反之，如果实体生成后才赋予连线或动画效果，则会生成上面两种日志行，而此日志行中不会包含有效信息。
 
 **示例**
 
@@ -2929,34 +2945,7 @@ ACT 日志示例：
 
 ### 273 行 (0x111)：实体控制 (ActorControl)
 
-This line contains certain data from `ActorControl` packets not otherwise made available
-through other log lines.
-
-`ActorControlExtra` lines include a numerical `category` field,
-which corresponds to the type of actor control being sent from the server.
-
-`param1` through `param4` are attributes whose meaning vary
-depending on the actor control category.
-
-The list of categories for which log lines are emitted is necessarily restrictive,
-given the volume of data, although more may be added in the future:
-
-| Category Name                   | `category`    |
-| ------------------------------- | ------------- |
-| SetAnimationState               | 0x003E (62)   |
-| DisplayPublicContentTextMessage | 0x0834 (2100) |
-
-- `SetAnimationState` - used to set the animation state of an actor.
-  - `param1`, like the `animationState` field in
-    [SpawnNpcExtra](#line-272-0x110-spawnnpcextra), corresponds to the
-    [BNpcState table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcState.csv).
-  - `param2` appears to change how an animation of that actor is rendered in-game.
-    More information is needed.
-- `DisplayPublicContentTextMessage` - Displays a message in the chat log
-  - `param1` seems to always be `0x0`
-  - `param2` corresponds to an entry in the
-    [PublicContentTextData table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/PublicContentTextData.csv)
-  - `param3` and `param4` are optional fields referenced in some messages
+此日志行包含 `ActorControl` 网络数据包中部分未被其他日志行涵盖的数据。
 
 **格式**
 
@@ -2967,6 +2956,43 @@ given the volume of data, although more may be added in the future:
 ACT 日志格式：
 [timestamp] 273 111:[id]:[category]:[param1]:[param2]:[param3]:[param4]
 ```
+
+**字段**
+
+- **`category`**  
+  类型 id，十进制，代表实体控制的类型。
+
+  此网络包有很多类型，OverlayPlugin 只筛选部分有实用价值的类型生成日志行。  
+  目前涵盖的类型如下，未来可能逐步添加更多类型。
+
+  | 类型描述                        | `category`   |
+  | ------------------------------- | ------------- |
+  | SetAnimationState               | 0x003E (62)   |
+  | DisplayPublicContentTextMessage | 0x0834 (2100) |
+
+  - `SetAnimationState`  
+    用于设置实体的动画状态，如 P9(s) 陨石发光、阿罗阿罗岛的炸弹发光。注意实体生成时就已经带有的动画效果在[添加实体+](#line272)日志行中。
+
+    - `param1`  
+      与[添加实体+](#line272)中的 `animationState` 字段类似，对应 [BNpcState 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/BNpcState.csv)中的内容。
+
+    - `param2`  
+      似乎是用于更改实体动画效果的呈现方式。需要更多信息。
+
+  - `DisplayPublicContentTextMessage`
+    用于在聊天窗口中显示一条日志消息。【？】  
+
+    - `param1`
+      似乎总是 0。  
+
+    - `param2`  
+      对应于 [PublicContentTextData 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/PublicContentTextData.csv)中的内容。
+
+    - `param3` `param4`  
+      某些消息中的可选字段。
+
+- **`param`**
+  参数的意义视 `category` 类型而定。
 
 **示例**
 
@@ -2984,32 +3010,9 @@ ACT 日志示例：
 
 <a name="line274"></a>
 
-### 274 行 (0x112)：实体控制-自身 (ActorControlSelf)
+### 274 行 (0x112)：自身实体控制 (ActorControlSelf)
 
-This line contains certain data from `ActorControlSelf` packets not otherwise made available
-through other log lines.
-
-`ActorControlSelfExtra` lines include a numerical `category` field,
-which corresponds to the type of actor control being sent from the server.
-
-`param1` through `param6` are attributes whose meaning vary
-depending on the actor control category.
-
-The list of categories for which log lines are emitted is necessarily restrictive,
-given the volume of data, although more may be added in the future:
-
-| Category Name           | `category`   |
-| ----------------------- | ------------ |
-| DisplayLogMessage       | 0x020F (527) |
-| DisplayLogMessageParams | 0x0210 (528) |
-
-- `DisplayLogMessage` - used to display a log message in the chat window.
-  - `param1`, like the `id` field in
-    [SystemLogMessage](#line-41-0x29-systemlogmessage), corresponds to the
-    [LogMessage table](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/LogMessage.csv).
-  - Remaining parameters are directly read by the LogMessage entry.
-- `DisplayLogMessageParams` - used to display a log message in the chat window.
-  - Very similar to `DisplayLogMessage`, except that `param2` appears to always be an actor ID.
+此日志行包含 `ActorControlSelf` 网络数据包中部分未被其他日志行涵盖的数据。
 
 **格式**
 
@@ -3020,6 +3023,33 @@ given the volume of data, although more may be added in the future:
 ACT 日志格式：
 [timestamp] 274 112:[id]:[category]:[param1]:[param2]:[param3]:[param4]:[param5]:[param6]
 ```
+
+**字段**
+
+- **`category`**
+  类型 id，十进制，代表实体控制的类型。
+
+  此网络包有很多类型，OverlayPlugin 只筛选部分有实用价值的类型生成日志行。  
+  目前涵盖的类型如下，未来可能逐步添加更多类型。
+
+  | 类型描述                | `category`   |
+  | ----------------------- | ------------ |
+  | DisplayLogMessage       | 0x020F (527) |
+  | DisplayLogMessageParams | 0x0210 (528) |
+
+  - `DisplayLogMessage`    
+    用于在聊天窗口中显示一条日志消息。【？】  
+
+    - `param1`
+      与[系统日志](#line41)的 `id` 字段类似，对应 [LogMessage 表](https://github.com/xivapi/ffxiv-datamining/blob/master/csv/LogMessage.csv)中的内容。
+
+    - 剩余参数由 LogMessage 条目直接读取。【？】
+
+  - `DisplayLogMessageParams`   
+    与 `DisplayLogMessage` 很类似用于在聊天窗口中显示一条日志消息，但 `param2` 似乎是一个实体 ID。
+
+- **`param`**
+  参数的意义视 `category` 类型而定。
 
 **示例**
 
